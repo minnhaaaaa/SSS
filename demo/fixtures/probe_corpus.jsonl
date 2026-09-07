@@ -1,0 +1,48 @@
+{"task_id":"pypi-web-1","category":"web_api","ecosystem":"pypi","prompt":"Build Python web API example 1 and list required packages."}
+{"task_id":"pypi-web-2","category":"web_api","ecosystem":"pypi","prompt":"Build Python web API example 2 and list required packages."}
+{"task_id":"pypi-web-3","category":"web_api","ecosystem":"pypi","prompt":"Build Python web API example 3 and list required packages."}
+{"task_id":"pypi-web-4","category":"web_api","ecosystem":"pypi","prompt":"Build Python web API example 4 and list required packages."}
+{"task_id":"npm-web-1","category":"web_api","ecosystem":"npm","prompt":"Build npm web API example 1 and list required packages."}
+{"task_id":"npm-web-2","category":"web_api","ecosystem":"npm","prompt":"Build npm web API example 2 and list required packages."}
+{"task_id":"npm-web-3","category":"web_api","ecosystem":"npm","prompt":"Build npm web API example 3 and list required packages."}
+{"task_id":"npm-web-4","category":"web_api","ecosystem":"npm","prompt":"Build npm web API example 4 and list required packages."}
+{"task_id":"pypi-data-1","category":"data","ecosystem":"pypi","prompt":"Build Python data workflow example 1 and list required packages."}
+{"task_id":"pypi-data-2","category":"data","ecosystem":"pypi","prompt":"Build Python data workflow example 2 and list required packages."}
+{"task_id":"pypi-data-3","category":"data","ecosystem":"pypi","prompt":"Build Python data workflow example 3 and list required packages."}
+{"task_id":"pypi-data-4","category":"data","ecosystem":"pypi","prompt":"Build Python data workflow example 4 and list required packages."}
+{"task_id":"npm-data-1","category":"data","ecosystem":"npm","prompt":"Build npm data workflow example 1 and list required packages."}
+{"task_id":"npm-data-2","category":"data","ecosystem":"npm","prompt":"Build npm data workflow example 2 and list required packages."}
+{"task_id":"npm-data-3","category":"data","ecosystem":"npm","prompt":"Build npm data workflow example 3 and list required packages."}
+{"task_id":"npm-data-4","category":"data","ecosystem":"npm","prompt":"Build npm data workflow example 4 and list required packages."}
+{"task_id":"pypi-cli-1","category":"cli","ecosystem":"pypi","prompt":"Build Python CLI example 1 and list required packages."}
+{"task_id":"pypi-cli-2","category":"cli","ecosystem":"pypi","prompt":"Build Python CLI example 2 and list required packages."}
+{"task_id":"pypi-cli-3","category":"cli","ecosystem":"pypi","prompt":"Build Python CLI example 3 and list required packages."}
+{"task_id":"pypi-cli-4","category":"cli","ecosystem":"pypi","prompt":"Build Python CLI example 4 and list required packages."}
+{"task_id":"npm-cli-1","category":"cli","ecosystem":"npm","prompt":"Build npm CLI example 1 and list required packages."}
+{"task_id":"npm-cli-2","category":"cli","ecosystem":"npm","prompt":"Build npm CLI example 2 and list required packages."}
+{"task_id":"npm-cli-3","category":"cli","ecosystem":"npm","prompt":"Build npm CLI example 3 and list required packages."}
+{"task_id":"npm-cli-4","category":"cli","ecosystem":"npm","prompt":"Build npm CLI example 4 and list required packages."}
+{"task_id":"pypi-test-1","category":"testing","ecosystem":"pypi","prompt":"Build Python testing example 1 and list required packages."}
+{"task_id":"pypi-test-2","category":"testing","ecosystem":"pypi","prompt":"Build Python testing example 2 and list required packages."}
+{"task_id":"pypi-test-3","category":"testing","ecosystem":"pypi","prompt":"Build Python testing example 3 and list required packages."}
+{"task_id":"pypi-test-4","category":"testing","ecosystem":"pypi","prompt":"Build Python testing example 4 and list required packages."}
+{"task_id":"npm-test-1","category":"testing","ecosystem":"npm","prompt":"Build npm testing example 1 and list required packages."}
+{"task_id":"npm-test-2","category":"testing","ecosystem":"npm","prompt":"Build npm testing example 2 and list required packages."}
+{"task_id":"npm-test-3","category":"testing","ecosystem":"npm","prompt":"Build npm testing example 3 and list required packages."}
+{"task_id":"npm-test-4","category":"testing","ecosystem":"npm","prompt":"Build npm testing example 4 and list required packages."}
+{"task_id":"pypi-auto-1","category":"automation","ecosystem":"pypi","prompt":"Build Python automation example 1 and list required packages."}
+{"task_id":"pypi-auto-2","category":"automation","ecosystem":"pypi","prompt":"Build Python automation example 2 and list required packages."}
+{"task_id":"pypi-auto-3","category":"automation","ecosystem":"pypi","prompt":"Build Python automation example 3 and list required packages."}
+{"task_id":"pypi-auto-4","category":"automation","ecosystem":"pypi","prompt":"Build Python automation example 4 and list required packages."}
+{"task_id":"npm-auto-1","category":"automation","ecosystem":"npm","prompt":"Build npm automation example 1 and list required packages."}
+{"task_id":"npm-auto-2","category":"automation","ecosystem":"npm","prompt":"Build npm automation example 2 and list required packages."}
+{"task_id":"npm-auto-3","category":"automation","ecosystem":"npm","prompt":"Build npm automation example 3 and list required packages."}
+{"task_id":"npm-auto-4","category":"automation","ecosystem":"npm","prompt":"Build npm automation example 4 and list required packages."}
+{"task_id":"pypi-parse-1","category":"parsing","ecosystem":"pypi","prompt":"Build Python parsing example 1 and list required packages."}
+{"task_id":"pypi-parse-2","category":"parsing","ecosystem":"pypi","prompt":"Build Python parsing example 2 and list required packages."}
+{"task_id":"pypi-parse-3","category":"parsing","ecosystem":"pypi","prompt":"Build Python parsing example 3 and list required packages."}
+{"task_id":"pypi-parse-4","category":"parsing","ecosystem":"pypi","prompt":"Build Python parsing example 4 and list required packages."}
+{"task_id":"npm-parse-1","category":"parsing","ecosystem":"npm","prompt":"Build npm parsing example 1 and list required packages."}
+{"task_id":"npm-parse-2","category":"parsing","ecosystem":"npm","prompt":"Build npm parsing example 2 and list required packages."}
+{"task_id":"npm-parse-3","category":"parsing","ecosystem":"npm","prompt":"Build npm parsing example 3 and list required packages."}
+{"task_id":"npm-parse-4","category":"parsing","ecosystem":"npm","prompt":"Build npm parsing example 4 and list required packages."}
