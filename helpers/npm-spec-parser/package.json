@@ -1,0 +1,11 @@
+{
+  "name": "@sss/npm-spec-parser",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "npm-package-arg": "^13.0.0"
+  }
+}

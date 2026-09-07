@@ -1,0 +1,10 @@
+{
+  "version": "2026-09-07",
+  "aliases": {
+    "PIL": "pillow",
+    "bs4": "beautifulsoup4",
+    "cv2": "opencv-python",
+    "sklearn": "scikit-learn",
+    "yaml": "pyyaml"
+  }
+}
