@@ -1,0 +1,30 @@
+name: sss-protected-session
+
+services:
+  protected-agent:
+    image: ${SSS_AGENT_IMAGE:?Set SSS_AGENT_IMAGE to a digest-pinned agent image}
+    environment:
+      SSS_API_URL: ${SSS_API_URL:?Set SSS_API_URL}
+      SSS_GATEWAY_URL: ${SSS_GATEWAY_URL:?Set SSS_GATEWAY_URL}
+      SSS_GUARD_SESSION_TOKEN: ${SSS_GUARD_SESSION_TOKEN:?Set a short-lived Guard token}
+    volumes:
+      - type: bind
+        source: ${SSS_PROJECT_PATH:?Set SSS_PROJECT_PATH}
+        target: /workspace
+    networks:
+      - protected
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 2
+
+networks:
+  protected:
+    external: true
+    name: ${SSS_PROTECTED_NETWORK:?Set SSS_PROTECTED_NETWORK}
