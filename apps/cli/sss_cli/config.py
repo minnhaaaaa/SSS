@@ -1,0 +1,108 @@
+"""Environment-backed CLI and protected-workspace configuration."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Mapping
+from dataclasses import dataclass
+from os import environ
+from pathlib import Path
+from urllib.parse import urlsplit
+
+
+class CliConfigurationError(ValueError):
+    """Raised when CLI runtime configuration is unsafe or incomplete."""
+
+
+def _http_url(values: Mapping[str, str], key: str) -> str:
+    value = values.get(key, "").strip()
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise CliConfigurationError(f"{key} must be an absolute HTTP(S) URL")
+    if parsed.username or parsed.password or parsed.fragment:
+        raise CliConfigurationError(f"{key} cannot contain credentials or a fragment")
+    return value.rstrip("/")
+
+
+def _optional_http_url(values: Mapping[str, str], key: str) -> str | None:
+    if not values.get(key, "").strip():
+        return None
+    return _http_url(values, key)
+
+
+def _executable_map(values: Mapping[str, str]) -> Mapping[str, Path]:
+    raw = values.get("SSS_REAL_EXECUTABLES_JSON", "{}")
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise CliConfigurationError("SSS_REAL_EXECUTABLES_JSON must be valid JSON") from exc
+    if not isinstance(decoded, dict):
+        raise CliConfigurationError("SSS_REAL_EXECUTABLES_JSON must be a JSON object")
+    result: dict[str, Path] = {}
+    for name, path_value in decoded.items():
+        if not isinstance(name, str) or not isinstance(path_value, str):
+            raise CliConfigurationError("executable names and paths must be strings")
+        path = Path(path_value)
+        if not path.is_absolute():
+            raise CliConfigurationError(f"real executable for {name!r} must be absolute")
+        result[name.casefold()] = path
+    return result
+
+
+@dataclass(frozen=True, slots=True)
+class CliSettings:
+    api_url: str
+    gateway_url: str
+    protected_api_url: str | None
+    protected_gateway_url: str | None
+    api_token: str | None
+    real_executables: Mapping[str, Path]
+    allowed_environment_keys: frozenset[str]
+    docker_executable: str
+    protected_compose_file: Path
+    protected_service: str
+    agent_image: str | None
+    protected_network: str | None
+    project_path: Path | None
+    guard_session_token: str | None
+
+    @classmethod
+    def from_env(cls, values: Mapping[str, str] | None = None) -> CliSettings:
+        source = environ if values is None else values
+        allowed = frozenset(
+            key.strip()
+            for key in source.get(
+                "SSS_ALLOWED_ENV_KEYS",
+                "PATH,LANG,LC_ALL,TERM,CI,SYSTEMROOT,WINDIR,COMSPEC,PATHEXT,TEMP,TMP",
+            ).split(",")
+            if key.strip()
+        )
+        compose_file = Path(
+            source.get("SSS_PROTECTED_COMPOSE_FILE", "infra/docker/compose.protected.yaml")
+        )
+        service = source.get("SSS_PROTECTED_SERVICE", "protected-agent").strip()
+        if not service:
+            raise CliConfigurationError("SSS_PROTECTED_SERVICE cannot be empty")
+        docker_executable = source.get("SSS_DOCKER_EXECUTABLE", "docker").strip()
+        if not docker_executable:
+            raise CliConfigurationError("SSS_DOCKER_EXECUTABLE cannot be empty")
+        return cls(
+            api_url=_http_url(source, "SSS_API_URL"),
+            gateway_url=_http_url(source, "SSS_GATEWAY_URL"),
+            protected_api_url=_optional_http_url(source, "SSS_PROTECTED_API_URL"),
+            protected_gateway_url=_optional_http_url(source, "SSS_PROTECTED_GATEWAY_URL"),
+            api_token=source.get("SSS_API_TOKEN") or None,
+            real_executables=_executable_map(source),
+            allowed_environment_keys=allowed,
+            docker_executable=docker_executable,
+            protected_compose_file=compose_file,
+            protected_service=service,
+            agent_image=source.get("SSS_AGENT_IMAGE") or None,
+            protected_network=source.get("SSS_PROTECTED_NETWORK") or None,
+            project_path=(
+                Path(source["SSS_PROJECT_PATH"]).expanduser()
+                if source.get("SSS_PROJECT_PATH")
+                else None
+            ),
+            guard_session_token=source.get("SSS_GUARD_SESSION_TOKEN") or None,
+        )

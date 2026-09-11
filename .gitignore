@@ -1,0 +1,41 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# JavaScript
+node_modules/
+.pnpm-store/
+apps/web/dist/
+coverage/
+playwright-report/
+test-results/
+
+# Runtime state and temporary output
+.runtime/
+*.log
+*.tmp
+*.pid
+
+# IDE and operating system
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
