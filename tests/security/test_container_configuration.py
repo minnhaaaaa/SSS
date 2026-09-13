@@ -26,6 +26,7 @@ def _compose_config() -> dict[str, Any]:
         "SSS_PNPM_VERSION": "local-pnpm-test-version",
         "SSS_API_BEARER_TOKENS": "local-configuration-token",
         "SSS_GATEWAY_UPSTREAMS_JSON": '{"npm":"https://registry.example.test"}',
+        "SSS_GATEWAY_PERMITS_JSON": '{"npm":{"/safe-lib":null}}',
         "SSS_CANARY_TOKEN": "local-canary-token",
         "SSS_PROJECT_PATH": str(ROOT),
     }
@@ -101,6 +102,9 @@ def test_network_roles_keep_public_egress_out_of_protected_agent() -> None:
 
     assert config["networks"]["protected"]["internal"] is True
     assert set(services["gateway"]["networks"]) == {"gateway-egress", "protected"}
+    assert services["gateway"]["environment"]["SSS_GATEWAY_PERMITS_JSON"] == (
+        '{"npm":{"/safe-lib":null}}'
+    )
     assert set(services["api"]["networks"]) == {"control-plane", "protected"}
     assert set(services["canary"]["networks"]) == {"protected"}
 
