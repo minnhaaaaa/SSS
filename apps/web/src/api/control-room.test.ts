@@ -42,7 +42,7 @@ describe("ControlRoomApi", () => {
       recentActivity: [],
     });
     expect(fetchImplementation.mock.calls[0]?.[0].toString()).toBe(
-      "https://api.example.test/v1/public/overview",
+      "https://api.example.test/v1/overview",
     );
   });
 
@@ -65,7 +65,7 @@ describe("ControlRoomApi", () => {
     await api.getPackage("@scope/tool name");
 
     expect(fetchImplementation.mock.calls[0]?.[0].toString()).toBe(
-      "https://api.example.test/v1/public/packages/%40scope%2Ftool%20name",
+      "https://api.example.test/v1/packages/%40scope%2Ftool%20name",
     );
   });
 

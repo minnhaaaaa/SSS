@@ -40,23 +40,23 @@ export class ControlRoomApi implements ControlRoomService {
   }
 
   public async getOverview(signal?: AbortSignal): Promise<OverviewData> {
-    return parseOverview(await this.client.request<unknown>("/v1/public/overview", withSignal(signal)));
+    return parseOverview(await this.client.request<unknown>("/v1/overview", withSignal(signal)));
   }
 
   public async getPackages(signal?: AbortSignal): Promise<readonly PackageSummary[]> {
     return parseList(
-      await this.client.request<unknown>("/v1/public/packages", withSignal(signal)),
+      await this.client.request<unknown>("/v1/packages", withSignal(signal)),
       parsePackageSummary,
     );
   }
 
   public async getPackage(name: string, signal?: AbortSignal): Promise<PackageDetail> {
-    const path = `/v1/public/packages/${encodeURIComponent(name)}`;
+    const path = `/v1/packages/${encodeURIComponent(name)}`;
     return parsePackageDetail(await this.client.request<unknown>(path, withSignal(signal)));
   }
 
   public async getEvidence(name: string, signal?: AbortSignal): Promise<readonly EvidenceItem[]> {
-    const path = `/v1/public/evidence/${encodeURIComponent(name)}`;
+    const path = `/v1/evidence/${encodeURIComponent(name)}`;
     return parseList(
       await this.client.request<unknown>(path, withSignal(signal)),
       parseEvidence,
@@ -65,17 +65,17 @@ export class ControlRoomApi implements ControlRoomService {
 
   public async getDecisions(signal?: AbortSignal): Promise<readonly DecisionItem[]> {
     return parseList(
-      await this.client.request<unknown>("/v1/public/decisions", withSignal(signal)),
+      await this.client.request<unknown>("/v1/decisions", withSignal(signal)),
       parseDecision,
     );
   }
 
   public async getCoverage(signal?: AbortSignal): Promise<CoverageData> {
-    return parseCoverage(await this.client.request<unknown>("/v1/public/coverage", withSignal(signal)));
+    return parseCoverage(await this.client.request<unknown>("/v1/coverage", withSignal(signal)));
   }
 
   public async getDemoStatus(signal?: AbortSignal): Promise<DemoStatus> {
-    return parseDemoStatus(await this.client.request<unknown>("/v1/public/demo", withSignal(signal)));
+    return parseDemoStatus(await this.client.request<unknown>("/v1/demo", withSignal(signal)));
   }
 
   public async runDemoAction(action: DemoAction, signal?: AbortSignal): Promise<DemoStatus> {

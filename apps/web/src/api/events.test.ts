@@ -21,7 +21,7 @@ describe("ApiEventStream", () => {
     stream.close();
 
     expect(listeners).toEqual(EVENT_TYPES);
-    expect(factory).toHaveBeenCalledWith(new URL("https://api.example.test/v1/public/events"), {
+    expect(factory).toHaveBeenCalledWith(new URL("https://api.example.test/v1/events"), {
       withCredentials: true,
     });
     expect(close).toHaveBeenCalledOnce();

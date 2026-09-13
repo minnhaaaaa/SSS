@@ -342,6 +342,192 @@ class ExasolRadarRepository:
             next_cursor = (_utc_timestamp(sort_time), str(last[2]))
         return items, next_cursor
 
+    def data_as_of(self) -> datetime:
+        rows = _rows(
+            self._connection.execute(
+                "SELECT MAX(EVENT_AT) FROM V_PACKAGE_EVIDENCE_TIMELINE"
+            )
+        )
+        if not rows or rows[0][0] is None:
+            return datetime.now(UTC)
+        return _utc_timestamp(rows[0][0])
+
+    def list_ui_packages(self, *, limit: int = 200) -> list[dict[str, object]]:
+        rows, _ = self.list_private_page(limit=limit)
+        return [self._ui_package(row) for row in rows]
+
+    def get_ui_package(self, name: str) -> dict[str, object]:
+        for package in self.list_ui_packages(limit=200):
+            if package["name"] == name:
+                latest = self._latest_decision(
+                    str(package["ecosystem"]),
+                    str(package["registry_origin"]),
+                    name,
+                )
+                evidence = self.list_ui_evidence(name)
+                return {
+                    **package,
+                    "absence_confidence": latest[0] if latest else None,
+                    "lifecycle": [str(item["label"]) for item in evidence],
+                }
+        raise KeyError("package not found")
+
+    def list_ui_evidence(self, name: str) -> list[dict[str, object]]:
+        rows = _rows(
+            self._connection.execute(
+                "SELECT ECOSYSTEM, EVENT_AT, EVENT_KIND, EVENT_ID FROM "
+                "V_PACKAGE_EVIDENCE_TIMELINE WHERE CANONICAL_NAME={name} "
+                "ORDER BY EVENT_AT ASC, EVENT_ID ASC LIMIT 500",
+                {"name": name},
+            )
+        )
+        return [
+            {
+                "id": str(row[3]),
+                "type": str(row[2]),
+                "label": f"{row[0]!s} {str(row[2]).replace('_', ' ')}",
+                "provenance": str(row[2]),
+                "occurred_at": _utc_timestamp(row[1]).isoformat(),
+            }
+            for row in rows
+        ]
+
+    def list_ui_decisions(self, *, limit: int = 200) -> list[dict[str, object]]:
+        if not 1 <= limit <= 200:
+            raise ValueError("limit must be between 1 and 200")
+        rows = _rows(
+            self._connection.execute(
+                "SELECT D.DECISION_ID, D.CANONICAL_NAME, D.ECOSYSTEM, D.DECISION, "
+                "D.POLICY_VERSION, D.DECIDED_AT, D.REASON_CODES_JSON, "
+                "COALESCE(A.CHILD_STARTED, FALSE) FROM POLICY_DECISIONS D LEFT JOIN "
+                "INSTALL_ATTEMPTS A ON A.DECISION_ID=D.DECISION_ID ORDER BY "
+                "D.DECIDED_AT DESC LIMIT {limit!d}",
+                {"limit": limit},
+            )
+        )
+        return [
+            {
+                "id": str(row[0]),
+                "package_name": str(row[1]),
+                "ecosystem": str(row[2]),
+                "result": str(row[3]),
+                "policy": str(row[4]),
+                "occurred_at": _utc_timestamp(row[5]).isoformat(),
+                "reason_codes": list(json.loads(str(row[6]))),
+                "package_manager_started": bool(row[7]),
+                "package_code_executed": False,
+            }
+            for row in rows
+        ]
+
+    def coverage(self) -> dict[str, object]:
+        packages = self.list_private_page(limit=200)[0]
+        origins = sorted({str(item["registry_origin"]) for item in packages})
+        worker_rows = _rows(
+            self._connection.execute(
+                "SELECT JOB_NAME, OUTCOME, DATA_AS_OF FROM WORKER_JOBS "
+                "ORDER BY UPDATED_AT DESC LIMIT 100"
+            )
+        )
+        services = [
+            {
+                "id": f"collector-{index}",
+                "name": str(row[0]),
+                "state": "operational" if str(row[1]) == "success" else "degraded",
+                "detail": f"Last outcome: {row[1]}",
+            }
+            for index, row in enumerate(worker_rows)
+        ]
+        return {
+            "data_as_of": self.data_as_of().isoformat(),
+            "registries": [
+                {
+                    "id": hashlib.sha256(origin.encode()).hexdigest()[:16],
+                    "name": origin,
+                    "state": "operational",
+                    "detail": "Evidence observed for this logical registry origin",
+                }
+                for origin in origins
+            ],
+            "services": services,
+            "protected_agents": sum(
+                int(str(item["protected_agent_attempts"])) for item in packages
+            ),
+            "observation_days": max(
+                (int(str(item["observation_days"])) for item in packages), default=0
+            ),
+            "verified_recommendations": sum(
+                int(str(item["verified_model_recommendations"])) for item in packages
+            ),
+            "public_failed_references": sum(
+                int(str(item["public_failed_references"])) for item in packages
+            ),
+            "model_configurations": sum(
+                int(str(item["model_configurations"])) for item in packages
+            ),
+        }
+
+    def public_aggregates(self) -> dict[str, object]:
+        rows = _rows(
+            self._connection.execute(
+                "SELECT ECOSYSTEM, STATUS, PACKAGE_COUNT, SYNTHETIC_PACKAGE_COUNT "
+                "FROM V_RADAR_PUBLIC_AGGREGATES ORDER BY ECOSYSTEM, STATUS"
+            )
+        )
+        return {
+            "data_as_of": self.data_as_of().isoformat(),
+            "groups": [
+                {
+                    "ecosystem": str(row[0]),
+                    "status": str(row[1]),
+                    "package_count": int(row[2]),
+                    "synthetic_package_count": int(row[3]),
+                }
+                for row in rows
+            ],
+        }
+
+    def _ui_package(self, row: Mapping[str, object]) -> dict[str, object]:
+        ecosystem = str(row["ecosystem"])
+        origin = str(row["registry_origin"])
+        name = str(row["canonical_name"])
+        latest = self._latest_decision(ecosystem, origin, name)
+        status = str(row["status"])
+        state = {
+            "verified_absent": "absent",
+            "verified_hallucination": "absent",
+            "registered": "registered",
+            "registered_after_absence": "high_risk",
+        }.get(status, "monitored")
+        if latest and latest[3] == Decision.BLOCK.value:
+            state = "blocked"
+        last_seen = row["first_registration_at"] or row["first_absence_at"]
+        identity = "\0".join((ecosystem, origin, name))
+        return {
+            "id": hashlib.sha256(identity.encode()).hexdigest(),
+            "name": name,
+            "ecosystem": ecosystem,
+            "registry_origin": origin,
+            "state": state,
+            "attractiveness": int(latest[1]) if latest else 0,
+            "policy_risk": int(latest[2]) if latest else None,
+            "last_seen": _utc_timestamp(str(last_seen)).isoformat() if last_seen else None,
+        }
+
+    def _latest_decision(
+        self, ecosystem: str, origin: str, name: str
+    ) -> Sequence[Any] | None:
+        rows = _rows(
+            self._connection.execute(
+                "SELECT ABSENCE_CONFIDENCE, TARGET_ATTRACTIVENESS, PACKAGE_POLICY_RISK, "
+                "DECISION FROM POLICY_DECISIONS WHERE ECOSYSTEM={ecosystem} AND "
+                "REGISTRY_ORIGIN={origin} AND CANONICAL_NAME={name} ORDER BY DECIDED_AT "
+                "DESC LIMIT 1",
+                {"ecosystem": ecosystem, "origin": origin, "name": name},
+            )
+        )
+        return rows[0] if rows else None
+
 
 class ExasolPolicyRepository:
     def __init__(self, connection: ExasolConnection) -> None:

@@ -157,9 +157,11 @@ def create_app(
 
         app.include_router(observations.router)
     if services.radar_repository is not None:
-        from sss_api.routes import radar
+        from sss_api.routes import public, radar
 
         app.include_router(radar.router)
+        app.include_router(radar.private_router)
+        app.include_router(public.aggregate_router)
     if services.demo_fixture is not None:
         from sss_api.routes import demo, public
 

@@ -17,6 +17,15 @@ from sss_api.events import ServerEvent
 from sss_api.services.demo import DemoState, DemoStatus
 
 router = APIRouter(prefix="/v1/public", tags=["public-demo"])
+aggregate_router = APIRouter(prefix="/v1/public", tags=["public-aggregates"])
+
+
+@aggregate_router.get("/aggregates")
+async def aggregates(request: Request) -> dict[str, Any]:
+    repository = request.app.state.radar_repository
+    if repository is None:
+        return {"data_as_of": datetime.now().astimezone().isoformat(), "groups": []}
+    return cast(dict[str, Any], repository.public_aggregates())
 
 
 class DemoFixture(Protocol):
