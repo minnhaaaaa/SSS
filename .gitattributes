@@ -1,0 +1,4 @@
+data/holdout/*.jsonl text eol=lf
+infra/exasol/migrations/*.sql text eol=lf
+apps/cli/sss_cli/shims/* text eol=lf
+scripts/*.sh text eol=lf
