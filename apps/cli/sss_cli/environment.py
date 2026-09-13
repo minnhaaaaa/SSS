@@ -24,14 +24,15 @@ def build_minimal_environment(
     *,
     allowed_keys: frozenset[str],
     overrides: Mapping[str, str] | None = None,
+    forbidden_keys: frozenset[str] = FORBIDDEN_EXACT_KEYS,
 ) -> dict[str, str]:
     selected = {
         key: value
         for key, value in source.items()
-        if key in allowed_keys and key not in FORBIDDEN_EXACT_KEYS
+        if key in allowed_keys and key not in forbidden_keys
     }
     for key, value in (overrides or {}).items():
-        if key in FORBIDDEN_EXACT_KEYS:
+        if key in forbidden_keys:
             raise UnsafeEnvironmentError(f"protected environment cannot contain {key}")
         if "\x00" in key or "\x00" in value or "=" in key:
             raise UnsafeEnvironmentError("environment override contains invalid characters")
