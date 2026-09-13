@@ -40,3 +40,27 @@ def test_operator_settings_do_not_require_package_manager_configuration() -> Non
 
     assert settings.api_url == "http://127.0.0.1:8000"
     assert settings.api_token == "operator-token"  # noqa: S105 - explicit test credential.
+
+
+def test_guard_uses_short_lived_session_token_without_fabricating_artifact_hash() -> None:
+    settings = CliSettings.from_env(
+        {
+            "SSS_API_URL": "http://api:8000",
+            "SSS_GATEWAY_URL": "http://gateway:8080",
+            "SSS_GUARD_SESSION_TOKEN": "session-token",
+        }
+    )
+
+    assert settings.api_token == "session-token"  # noqa: S105 - explicit test credential.
+    assert settings.demo_artifact_sha256 is None
+
+
+def test_guard_requires_approval_token_and_nonce_as_a_pair() -> None:
+    with pytest.raises(CliConfigurationError, match="configured together"):
+        CliSettings.from_env(
+            {
+                "SSS_API_URL": "http://api:8000",
+                "SSS_GATEWAY_URL": "http://gateway:8080",
+                "SSS_APPROVAL_TOKEN": "one-use-token",
+            }
+        )

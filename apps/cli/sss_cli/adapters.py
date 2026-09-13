@@ -31,21 +31,34 @@ class HttpGuardClient:
         api_url: str,
         token: str,
         http_client: httpx.Client | None = None,
+        approval_token: str | None = None,
+        approval_nonce: str | None = None,
     ) -> None:
         self._api_url = api_url.rstrip("/")
         self._token = token
         self._client = http_client or httpx.Client(timeout=5, trust_env=False)
+        self._approval_token = approval_token
+        self._approval_nonce = approval_nonce
 
     @property
     def _authorization(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._token}"}
+
+    @property
+    def _guard_headers(self) -> dict[str, str]:
+        headers = self._authorization
+        if self._approval_token is not None:
+            headers["X-SSS-Approval"] = self._approval_token
+        if self._approval_nonce is not None:
+            headers["X-SSS-Approval-Nonce"] = self._approval_nonce
+        return headers
 
     def check(self, request: InstallRequest) -> GuardDecisionResult:
         try:
             response = self._client.post(
                 f"{self._api_url}/v1/check",
                 json=_request_payload(request),
-                headers={**self._authorization, "Idempotency-Key": request.request_id},
+                headers={**self._guard_headers, "Idempotency-Key": request.request_id},
             )
             response.raise_for_status()
             payload = response.json()

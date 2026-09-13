@@ -81,10 +81,13 @@ class CliSettings:
     protected_network: str | None
     project_path: Path | None
     guard_session_token: str | None
+    approval_token: str | None = None
+    approval_nonce: str | None = None
     npm_registry_url: str = "https://registry.npmjs.org"
+    pypi_registry_url: str = "https://pypi.org"
     project_id: str = "project-demo"
     agent_family: str = "codex"
-    demo_artifact_sha256: str = "b" * 64
+    demo_artifact_sha256: str | None = None
 
     @classmethod
     def from_env(cls, values: Mapping[str, str] | None = None) -> CliSettings:
@@ -106,11 +109,20 @@ class CliSettings:
         docker_executable = source.get("SSS_DOCKER_EXECUTABLE", "docker").strip()
         if not docker_executable:
             raise CliConfigurationError("SSS_DOCKER_EXECUTABLE cannot be empty")
-        artifact_sha256 = source.get("SSS_DEMO_ARTIFACT_SHA256", "b" * 64)
-        if len(artifact_sha256) != 64 or any(
-            character not in "0123456789abcdef" for character in artifact_sha256
+        artifact_sha256 = (
+            source.get("SSS_ARTIFACT_SHA256") or source.get("SSS_DEMO_ARTIFACT_SHA256") or None
+        )
+        if artifact_sha256 is not None and (
+            len(artifact_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in artifact_sha256)
         ):
-            raise CliConfigurationError("SSS_DEMO_ARTIFACT_SHA256 must be a lowercase SHA-256")
+            raise CliConfigurationError("SSS_ARTIFACT_SHA256 must be a lowercase SHA-256")
+        approval_token = source.get("SSS_APPROVAL_TOKEN") or None
+        approval_nonce = source.get("SSS_APPROVAL_NONCE") or None
+        if (approval_token is None) != (approval_nonce is None):
+            raise CliConfigurationError(
+                "SSS_APPROVAL_TOKEN and SSS_APPROVAL_NONCE must be configured together"
+            )
         project_id = source.get("SSS_PROJECT_ID", "project-demo").strip()
         agent_family = source.get("SSS_AGENT_FAMILY", "codex").strip()
         if not project_id or not agent_family:
@@ -120,7 +132,9 @@ class CliSettings:
             gateway_url=_http_url(source, "SSS_GATEWAY_URL"),
             protected_api_url=_optional_http_url(source, "SSS_PROTECTED_API_URL"),
             protected_gateway_url=_optional_http_url(source, "SSS_PROTECTED_GATEWAY_URL"),
-            api_token=source.get("SSS_API_TOKEN") or None,
+            api_token=(
+                source.get("SSS_API_TOKEN") or source.get("SSS_GUARD_SESSION_TOKEN") or None
+            ),
             real_executables=_executable_map(source),
             allowed_environment_keys=allowed,
             docker_executable=docker_executable,
@@ -134,10 +148,17 @@ class CliSettings:
                 else None
             ),
             guard_session_token=source.get("SSS_GUARD_SESSION_TOKEN") or None,
+            approval_token=approval_token,
+            approval_nonce=approval_nonce,
             npm_registry_url=_http_url(
                 source,
                 "SSS_NPM_REGISTRY_URL",
                 "https://registry.npmjs.org",
+            ),
+            pypi_registry_url=_http_url(
+                source,
+                "SSS_PYPI_REGISTRY_URL",
+                "https://pypi.org",
             ),
             project_id=project_id,
             agent_family=agent_family,
