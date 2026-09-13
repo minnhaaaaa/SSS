@@ -42,4 +42,15 @@ describe("OverviewRadar", () => {
       expect(markup).toContain(`>${label}</button>`);
     }
   });
+
+  it("uses the supplied fitted zoom and keeps node intelligence hidden until hover", () => {
+    const markup = renderToStaticMarkup(
+      <OverviewRadar nodes={nodes} initialZoom={1.1} onSelectPackage={() => undefined} />,
+    );
+
+    expect(markup).toContain(">110%</output>");
+    expect(markup).toContain("scale(1.1)");
+    expect(markup).toContain('pointer-events="none" opacity="0"');
+    expect(markup).toContain("NODE INTELLIGENCE");
+  });
 });

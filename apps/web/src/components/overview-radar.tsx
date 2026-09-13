@@ -9,6 +9,7 @@ interface OverviewRadarProps {
   readonly onSelectPackage: (name: string) => void;
   readonly stats?: readonly RadarStat[];
   readonly showStateLegend?: boolean;
+  readonly initialZoom?: number;
 }
 
 type EcosystemFilter = "all" | Ecosystem;
@@ -38,10 +39,16 @@ const radarPositions = [
 
 const legendStates: readonly PackageState[] = ["absent", "monitored", "registered", "high_risk", "blocked"];
 
-export function OverviewRadar({ nodes, onSelectPackage, stats = [], showStateLegend = false }: OverviewRadarProps) {
+export function OverviewRadar({
+  nodes,
+  onSelectPackage,
+  stats = [],
+  showStateLegend = false,
+  initialZoom = 1,
+}: OverviewRadarProps) {
   const [ecosystem, setEcosystem] = useState<EcosystemFilter>("all");
   const [query, setQuery] = useState("");
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(() => clampZoom(initialZoom));
   const [stateFilter, setStateFilter] = useState<PackageState | null>(null);
   const [hoveredName, setHoveredName] = useState<string | null>(null);
   const [lastHoveredName, setLastHoveredName] = useState(nodes[0]?.name ?? null);
@@ -109,7 +116,7 @@ export function OverviewRadar({ nodes, onSelectPackage, stats = [], showStateLeg
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className="min-w-0 flex-1 bg-transparent font-mono text-[0.62rem] text-[#FFF9F4] outline-none placeholder:text-[#FFF9F4]/58 focus-visible:outline-none"
-            placeholder="synthetic-npm-name"
+            placeholder="Search package name"
           />
         </label>
 
@@ -172,7 +179,7 @@ export function OverviewRadar({ nodes, onSelectPackage, stats = [], showStateLeg
           <RadarControl label="Zoom in" onClick={() => setZoom((value) => clampZoom(value + 0.15))}>
             <Plus size={13} />
           </RadarControl>
-          <RadarControl label="Reset radar" onClick={() => { setZoom(1); setEcosystem("all"); setStateFilter(null); setQuery(""); setHoveredName(null); }}>
+          <RadarControl label="Reset radar" onClick={() => { setZoom(clampZoom(initialZoom)); setEcosystem("all"); setStateFilter(null); setQuery(""); setHoveredName(null); }}>
             <LocateFixed size={13} />
           </RadarControl>
         </div>
@@ -287,26 +294,26 @@ function NodeTooltip({ node, visible, zoom }: { readonly node: PositionedNode; r
       style={{ transition: "opacity 90ms ease-out" }}
       aria-hidden={!visible}
     >
-      <path d={`M${scaledX + 8} ${scaledY - 5}L640 104`} fill="none" stroke={color} strokeOpacity="0.78" />
-      <g transform="translate(640 48)">
-        <rect width="220" height="112" rx="5" fill="#0C0F0C" stroke={color} strokeWidth="1.25" />
-        <rect width="3" height="112" rx="1.5" fill={color} />
-        <text x="14" y="18" fill={color} fontFamily="monospace" fontSize="9.2" fontWeight="700" letterSpacing="0.5">
+      <path d={`M${scaledX + 8} ${scaledY - 5}L626 108`} fill="none" stroke={color} strokeOpacity="0.78" />
+      <g transform="translate(626 42)">
+        <rect width="240" height="132" rx="7" fill="#0C0F0C" stroke={color} strokeWidth="1.25" />
+        <rect width="4" height="132" rx="2" fill={color} />
+        <text x="15" y="21" fill={color} fontFamily="monospace" fontSize="10.5" fontWeight="700" letterSpacing="0.5">
           NODE INTELLIGENCE
         </text>
-        <text x="14" y="36" fill="#FFF9F4" fontFamily="monospace" fontSize="10.4" fontWeight="700">
+        <text x="15" y="42" fill="#FFF9F4" fontFamily="monospace" fontSize="12" fontWeight="700">
           {node.item.name}
         </text>
-        <text x="14" y="53" fill="#BCC9CD" fontFamily="monospace" fontSize="8.6">
+        <text x="15" y="62" fill="#BCC9CD" fontFamily="monospace" fontSize="9.8">
           REGISTRY  {node.item.ecosystem.toUpperCase()}   ·   STATE  {titleCase(node.item.state).toUpperCase()}
         </text>
-        <text x="14" y="69" fill="#BCC9CD" fontFamily="monospace" fontSize="8.6">
+        <text x="15" y="82" fill="#BCC9CD" fontFamily="monospace" fontSize="9.8">
           ATTRACTIVENESS  {node.item.attractiveness} / 100
         </text>
-        <text x="14" y="85" fill="#BCC9CD" fontFamily="monospace" fontSize="8.6">
+        <text x="15" y="102" fill="#BCC9CD" fontFamily="monospace" fontSize="9.8">
           POLICY RISK  {policyRisk}
         </text>
-        <text x="14" y="101" fill="#BCC9CD" fontFamily="monospace" fontSize="8.6">
+        <text x="15" y="122" fill="#BCC9CD" fontFamily="monospace" fontSize="9.8">
           LAST SEEN  {formatRadarDate(node.item.lastSeen)}
         </text>
       </g>
