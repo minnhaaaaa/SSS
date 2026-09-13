@@ -31,6 +31,7 @@ class ApiSettings:
     idempotency_key_max_bytes: int
     sse_heartbeat_seconds: int
     sse_buffer_size: int
+    approval_signing_key: str | None = None
 
     @classmethod
     def from_env(cls, values: Mapping[str, str] | None = None) -> ApiSettings:
@@ -48,4 +49,5 @@ class ApiSettings:
             idempotency_key_max_bytes=_positive_int(source, "SSS_IDEMPOTENCY_KEY_MAX_BYTES", 128),
             sse_heartbeat_seconds=_positive_int(source, "SSS_SSE_HEARTBEAT_SECONDS", 15),
             sse_buffer_size=_positive_int(source, "SSS_SSE_BUFFER_SIZE", 512),
+            approval_signing_key=source.get("SSS_APPROVAL_SIGNING_KEY") or None,
         )
