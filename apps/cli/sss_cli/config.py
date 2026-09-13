@@ -14,8 +14,8 @@ class CliConfigurationError(ValueError):
     """Raised when CLI runtime configuration is unsafe or incomplete."""
 
 
-def _http_url(values: Mapping[str, str], key: str) -> str:
-    value = values.get(key, "").strip()
+def _http_url(values: Mapping[str, str], key: str, default: str = "") -> str:
+    value = values.get(key, default).strip()
     parsed = urlsplit(value)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise CliConfigurationError(f"{key} must be an absolute HTTP(S) URL")
@@ -65,6 +65,10 @@ class CliSettings:
     protected_network: str | None
     project_path: Path | None
     guard_session_token: str | None
+    npm_registry_url: str = "https://registry.npmjs.org"
+    project_id: str = "project-demo"
+    agent_family: str = "codex"
+    demo_artifact_sha256: str = "b" * 64
 
     @classmethod
     def from_env(cls, values: Mapping[str, str] | None = None) -> CliSettings:
@@ -86,6 +90,15 @@ class CliSettings:
         docker_executable = source.get("SSS_DOCKER_EXECUTABLE", "docker").strip()
         if not docker_executable:
             raise CliConfigurationError("SSS_DOCKER_EXECUTABLE cannot be empty")
+        artifact_sha256 = source.get("SSS_DEMO_ARTIFACT_SHA256", "b" * 64)
+        if len(artifact_sha256) != 64 or any(
+            character not in "0123456789abcdef" for character in artifact_sha256
+        ):
+            raise CliConfigurationError("SSS_DEMO_ARTIFACT_SHA256 must be a lowercase SHA-256")
+        project_id = source.get("SSS_PROJECT_ID", "project-demo").strip()
+        agent_family = source.get("SSS_AGENT_FAMILY", "codex").strip()
+        if not project_id or not agent_family:
+            raise CliConfigurationError("SSS_PROJECT_ID and SSS_AGENT_FAMILY are required")
         return cls(
             api_url=_http_url(source, "SSS_API_URL"),
             gateway_url=_http_url(source, "SSS_GATEWAY_URL"),
@@ -105,4 +118,12 @@ class CliSettings:
                 else None
             ),
             guard_session_token=source.get("SSS_GUARD_SESSION_TOKEN") or None,
+            npm_registry_url=_http_url(
+                source,
+                "SSS_NPM_REGISTRY_URL",
+                "https://registry.npmjs.org",
+            ),
+            project_id=project_id,
+            agent_family=agent_family,
+            demo_artifact_sha256=artifact_sha256,
         )

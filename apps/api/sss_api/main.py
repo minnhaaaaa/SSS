@@ -12,7 +12,8 @@ from sss_api.config import ApiSettings
 from sss_api.events import EventBroker
 from sss_api.middleware.body_limit import RequestBodyLimitMiddleware
 from sss_api.middleware.request_id import RequestIdMiddleware
-from sss_api.routes import events, guard, health, interventions
+from sss_api.routes import attempts, events, guard, health, interventions
+from sss_api.services.attempts import AttemptStore
 from sss_api.services.guard import FixedDemoEvidenceProvider, GuardService
 from sss_api.services.interventions import InterventionStore
 
@@ -23,12 +24,14 @@ def create_app(
     event_broker: EventBroker | None = None,
     guard_service: GuardService | None = None,
     intervention_store: InterventionStore | None = None,
+    install_attempt_store: AttemptStore | None = None,
 ) -> FastAPI:
     resolved_settings = settings or ApiSettings.from_env()
     app = FastAPI(title="SSS API", version="0.1.0")
     app.state.settings = resolved_settings
     broker = event_broker or EventBroker(capacity=resolved_settings.sse_buffer_size)
     store = intervention_store or InterventionStore()
+    attempts_store = install_attempt_store or AttemptStore()
     if guard_service is None:
         fixture_path = Path(__file__).resolve().parents[3] / "demo/fixtures/fixed-intelligence.json"
         guard_service = GuardService(
@@ -40,12 +43,14 @@ def create_app(
     app.state.event_broker = broker
     app.state.guard_service = guard_service
     app.state.intervention_store = store
+    app.state.install_attempt_store = attempts_store
     app.add_middleware(RequestBodyLimitMiddleware, max_bytes=resolved_settings.max_body_bytes)
     app.add_middleware(RequestIdMiddleware)
     app.include_router(health.router)
     app.include_router(events.router)
     app.include_router(guard.router)
     app.include_router(interventions.router)
+    app.include_router(attempts.router)
     return app
 
 

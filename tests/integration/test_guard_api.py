@@ -96,3 +96,33 @@ async def test_check_rejects_unknown_fields() -> None:
         )
 
     assert response.status_code == 422
+
+
+async def test_install_attempt_records_nonexecution_idempotently() -> None:
+    app = create_app(settings=_settings())
+    transport = httpx.ASGITransport(app=app)
+    payload = {
+        "decision_id": "decision-block",
+        "manager": "pnpm",
+        "arguments": ["add", "@sss-demo/reserved-synthetic@1.0.0"],
+        "agent_family": "codex",
+        "project_id": "project-demo",
+        "decision": "block",
+        "child_started": False,
+    }
+    headers = {
+        "Authorization": "Bearer test-token",
+        "Idempotency-Key": "attempt:decision-block",
+    }
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        first = await client.post("/v1/install-attempts", json=payload, headers=headers)
+        second = await client.post("/v1/install-attempts", json=payload, headers=headers)
+        listed = await client.get(
+            "/v1/install-attempts", headers={"Authorization": "Bearer test-token"}
+        )
+
+    assert first.status_code == 201
+    assert second.json() == first.json()
+    assert listed.status_code == 200
+    assert listed.json()["items"] == [first.json()]
+    assert first.json()["child_started"] is False
