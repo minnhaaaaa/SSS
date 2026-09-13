@@ -1,5 +1,11 @@
 """Stable public domain and policy primitives for SSS consumers."""
 
+from sss_core.auth import (
+    CredentialAuditRecord,
+    CredentialPrincipal,
+    CredentialRecord,
+    CredentialStore,
+)
 from sss_core.domain import (
     CandidateStatus,
     Decision,
@@ -18,6 +24,10 @@ from sss_core.runtime import RuntimeMode
 __all__ = [
     "POLICY_VERSION",
     "CandidateStatus",
+    "CredentialAuditRecord",
+    "CredentialPrincipal",
+    "CredentialRecord",
+    "CredentialStore",
     "Decision",
     "Ecosystem",
     "EvidenceProvenance",

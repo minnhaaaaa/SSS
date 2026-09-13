@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from sss_api.idempotency import require_idempotency_key
 from sss_api.schemas.guard import GuardCheckRequest, GuardCheckResponse
-from sss_api.security import require_service_token
+from sss_api.security import require_scope
 
 router = APIRouter(prefix="/v1", tags=["guard"])
 
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/v1", tags=["guard"])
 @router.post(
     "/check",
     response_model=GuardCheckResponse,
-    dependencies=[Depends(require_service_token)],
+    dependencies=[Depends(require_scope("agent:check"))],
 )
 async def check(
     payload: GuardCheckRequest,

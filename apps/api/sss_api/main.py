@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from fastapi import FastAPI
 from sss_core import RuntimeMode
+from sss_core.auth import CredentialAuditRecord, CredentialStore
 from sss_core.config import ExasolSettings
 
 from sss_api.config import ApiSettings, ConfigurationError
@@ -29,6 +30,7 @@ class ServiceContainer:
     approval_service: ApprovalService | None
     demo_controller: object | None = None
     demo_fixture: object | None = None
+    credential_audit_sink: Callable[[CredentialAuditRecord], None] | None = None
 
 
 ServiceFactory = Callable[[ApiSettings], ServiceContainer]
@@ -76,6 +78,12 @@ def create_app(
         raise ConfigurationError("production service composition cannot include demo state")
     app = FastAPI(title="SSS API", version="0.1.0")
     app.state.settings = resolved_settings
+    app.state.credentials = (
+        CredentialStore.from_file(resolved_settings.credentials_file)
+        if resolved_settings.credentials_file is not None
+        else CredentialStore.from_raw_tokens(resolved_settings.bearer_tokens)
+    )
+    app.state.credential_audit_sink = services.credential_audit_sink
     app.state.runtime_mode = resolved_settings.runtime_mode
     app.state.event_broker = services.event_broker
     app.state.guard_service = services.guard_service

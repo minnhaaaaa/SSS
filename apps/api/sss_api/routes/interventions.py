@@ -6,12 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from sss_api.idempotency import require_idempotency_key
 from sss_api.schemas.guard import InterventionListResponse, InterventionResponse
-from sss_api.security import require_service_token
+from sss_api.security import require_scope
 
 router = APIRouter(
     prefix="/v1/interventions",
     tags=["interventions"],
-    dependencies=[Depends(require_service_token)],
+    dependencies=[Depends(require_scope("operator:intervene"))],
 )
 
 

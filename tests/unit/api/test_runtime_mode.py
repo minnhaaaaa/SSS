@@ -60,7 +60,13 @@ def _production_values(credentials_file: Path) -> dict[str, str]:
 
 def _production_settings(tmp_path: Path) -> ApiSettings:
     credentials_file = tmp_path / "credentials.json"
-    credentials_file.write_text('{"credentials": []}', encoding="utf-8")
+    credentials_file.write_text(
+        '{"credentials":[{"credential_id":"test-agent","token_sha256":"'
+        + "a" * 64
+        + '\",\"scopes\":[\"agent:check\"],\"enabled\":true}]}',
+        encoding="utf-8",
+    )
+    credentials_file.chmod(0o600)
     return ApiSettings.from_env(_production_values(credentials_file))
 
 

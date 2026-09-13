@@ -13,6 +13,7 @@ from typing import Any, Protocol
 from urllib.parse import quote
 from uuid import uuid4
 
+from sss_core.auth import CredentialAuditRecord
 from sss_core.demo import FixedDemoFixture
 from sss_core.domain import (
     CandidateStatus,
@@ -388,6 +389,34 @@ class ExasolOperationalRepository:
 
     def __init__(self, connection: ExasolConnection) -> None:
         self._connection = connection
+
+    def record_credential_audit(self, record: CredentialAuditRecord) -> None:
+        parameters = {
+            "audit_id": record.audit_id,
+            "credential_id": record.credential_id,
+            "action_type": "authenticate",
+            "request_id": record.request_id,
+            "occurred_at": _exasol_timestamp(record.occurred_at),
+            "metadata_json": _json(
+                {
+                    "route": record.route,
+                    "required_scope": record.required_scope,
+                    "outcome": record.outcome,
+                }
+            ),
+        }
+        try:
+            self._connection.execute(
+                "INSERT INTO CREDENTIAL_AUDIT (AUDIT_ID, CREDENTIAL_ID, ACTION_TYPE, "
+                "REQUEST_ID, OCCURRED_AT, METADATA_JSON) VALUES ({audit_id}, "
+                "{credential_id}, {action_type}, {request_id}, {occurred_at}, "
+                "{metadata_json})",
+                parameters,
+            )
+            self._connection.commit()
+        except Exception:
+            self._connection.rollback()
+            raise
 
     def record_decision(
         self,

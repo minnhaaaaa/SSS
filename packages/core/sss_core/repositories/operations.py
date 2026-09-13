@@ -8,6 +8,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Protocol
 
+from sss_core.auth import CredentialAuditRecord
 from sss_core.domain import Decision, InstallRequest, PackageIdentity, PolicyDecision
 
 
@@ -69,6 +70,8 @@ class OperationalEvent:
 
 
 class OperationalRepository(Protocol):
+    def record_credential_audit(self, record: CredentialAuditRecord) -> None: ...
+
     def record_decision(
         self,
         request: InstallRequest,

@@ -11,12 +11,12 @@ from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import StreamingResponse
 
 from sss_api.events import ServerEvent
-from sss_api.security import require_service_token
+from sss_api.security import require_scope
 
 router = APIRouter(prefix="/v1", tags=["events"])
 
 
-@router.get("/events", dependencies=[Depends(require_service_token)])
+@router.get("/events", dependencies=[Depends(require_scope("radar:read"))])
 async def events(
     request: Request,
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),

@@ -11,13 +11,12 @@ from sss_api.schemas.approvals import (
     ApprovalCreateRequest,
     ApprovalCreateResponse,
 )
-from sss_api.security import require_service_token
+from sss_api.security import require_scope
 from sss_api.services.approvals import ApprovalError
 
 router = APIRouter(
     prefix="/v1/approvals",
     tags=["approvals"],
-    dependencies=[Depends(require_service_token)],
 )
 
 
@@ -31,7 +30,12 @@ def _service(request: Request):  # type: ignore[no-untyped-def]
     return service
 
 
-@router.post("", response_model=ApprovalCreateResponse, status_code=201)
+@router.post(
+    "",
+    response_model=ApprovalCreateResponse,
+    status_code=201,
+    dependencies=[Depends(require_scope("approval:write"))],
+)
 async def create(
     payload: ApprovalCreateRequest,
     request: Request,
@@ -55,7 +59,11 @@ async def create(
     return ApprovalCreateResponse.from_domain(grant)
 
 
-@router.post("/consume", response_model=ApprovalConsumeResponse)
+@router.post(
+    "/consume",
+    response_model=ApprovalConsumeResponse,
+    dependencies=[Depends(require_scope("agent:check"))],
+)
 async def consume(
     payload: ApprovalConsumeRequest,
     request: Request,

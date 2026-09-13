@@ -10,16 +10,20 @@ from sss_api.schemas.attempts import (
     InstallAttemptRequest,
     InstallAttemptResponse,
 )
-from sss_api.security import require_service_token
+from sss_api.security import require_scope
 
 router = APIRouter(
     prefix="/v1/install-attempts",
     tags=["attempts"],
-    dependencies=[Depends(require_service_token)],
 )
 
 
-@router.post("", response_model=InstallAttemptResponse, status_code=201)
+@router.post(
+    "",
+    response_model=InstallAttemptResponse,
+    status_code=201,
+    dependencies=[Depends(require_scope("agent:check"))],
+)
 async def record(
     payload: InstallAttemptRequest,
     request: Request,
@@ -35,7 +39,11 @@ async def record(
     return InstallAttemptResponse.from_domain(attempt)
 
 
-@router.get("", response_model=InstallAttemptListResponse)
+@router.get(
+    "",
+    response_model=InstallAttemptListResponse,
+    dependencies=[Depends(require_scope("operator:intervene"))],
+)
 async def list_attempts(request: Request) -> InstallAttemptListResponse:
     return InstallAttemptListResponse(
         items=tuple(

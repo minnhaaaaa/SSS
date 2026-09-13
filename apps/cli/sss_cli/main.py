@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from os import environ
+from typing import Annotated
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from sss_cli.admin import generate_token
 from sss_cli.config import CliSettings, OperatorSettings
 from sss_cli.doctor import check_http_service
 from sss_cli.intervene import HttpInterventionClient, run_intervention
@@ -15,7 +18,24 @@ from sss_cli.protect import ProtectedLauncher
 from sss_cli.protected_config import build_protected_compose_environment
 
 app = typer.Typer(no_args_is_help=True)
+admin_app = typer.Typer(no_args_is_help=True)
+token_app = typer.Typer(no_args_is_help=True)
+app.add_typer(admin_app, name="admin")
+admin_app.add_typer(token_app, name="token")
 console = Console()
+
+
+@token_app.command("generate")
+def generate_admin_token(
+    credential_id: Annotated[str, typer.Argument(help="Stable credential identifier.")],
+    scope: Annotated[
+        list[str], typer.Option("--scope", help="Repeat for every granted scope.")
+    ],
+) -> None:
+    """Generate a raw token once and its safe digest-backed credential record."""
+    generated = generate_token(credential_id, frozenset(scope))
+    console.print(f"Raw token (shown once): {generated.raw_token}")
+    console.print(json.dumps(generated.record.to_json(), sort_keys=True))
 
 
 @app.command()

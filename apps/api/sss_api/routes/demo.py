@@ -8,13 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 
 from sss_api.idempotency import require_idempotency_key
-from sss_api.security import require_service_token
+from sss_api.security import require_scope
 from sss_api.services.demo import DemoStatus
 
 router = APIRouter(
     prefix="/v1/demo",
     tags=["demo"],
-    dependencies=[Depends(require_service_token)],
+    dependencies=[Depends(require_scope("operator:intervene"))],
 )
 
 
