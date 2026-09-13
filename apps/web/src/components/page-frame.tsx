@@ -20,14 +20,19 @@ export function PageFrame({ eyebrow, title, description, meta, children }: PageF
         { reduceMotion: "(prefers-reduced-motion: reduce)" },
         (context) => {
           const reduceMotion = Boolean(context.conditions?.reduceMotion);
+          const revealTargets = root.current?.querySelectorAll<HTMLElement>("[data-reveal]");
           if (reduceMotion) {
-            gsap.set("[data-reveal]", { autoAlpha: 1, y: 0 });
+            if (revealTargets?.length) {
+              gsap.set(revealTargets, { autoAlpha: 1, y: 0 });
+            }
             return;
           }
-          gsap
+          const timeline = gsap
             .timeline({ defaults: { duration: 0.55, ease: "power3.out" } })
-            .from(".page-heading > *", { autoAlpha: 0, y: 16, stagger: 0.07 })
-            .from("[data-reveal]", { autoAlpha: 0, y: 20, stagger: 0.06 }, "-=0.25");
+            .from(".page-heading > *", { autoAlpha: 0, y: 16, stagger: 0.07 });
+          if (revealTargets?.length) {
+            timeline.from(revealTargets, { autoAlpha: 0, y: 20, stagger: 0.06 }, "-=0.25");
+          }
         },
       );
       return () => media.revert();
