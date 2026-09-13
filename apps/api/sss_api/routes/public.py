@@ -6,11 +6,12 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from contextlib import suppress
-from typing import Any, cast
+from datetime import datetime
+from typing import Any, Protocol, cast
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-from sss_core.demo import FixedDemoFixture
+from sss_core import EvidenceScores, PackageIdentity
 
 from sss_api.events import ServerEvent
 from sss_api.services.demo import DemoState, DemoStatus
@@ -18,8 +19,23 @@ from sss_api.services.demo import DemoState, DemoStatus
 router = APIRouter(prefix="/v1/public", tags=["public-demo"])
 
 
-def _fixture(request: Request) -> FixedDemoFixture:
-    return cast(FixedDemoFixture, request.app.state.demo_fixture)
+class DemoFixture(Protocol):
+    package: PackageIdentity
+    scores: EvidenceScores
+    attack_at: datetime
+    first_absence_at: datetime
+    registered_at: datetime
+    policy_version: str
+    registration_age_minutes: int
+    protected_agent_attempts: int
+    observation_days: int
+    verified_model_recommendations: int
+    public_failed_references: int
+    model_configurations: int
+
+
+def _fixture(request: Request) -> DemoFixture:
+    return cast(DemoFixture, request.app.state.demo_fixture)
 
 
 def _effective_status(request: Request) -> DemoStatus:
@@ -37,7 +53,7 @@ def _effective_status(request: Request) -> DemoStatus:
     return current
 
 
-def _package(fixture: FixedDemoFixture, state: DemoState) -> dict[str, Any]:
+def _package(fixture: DemoFixture, state: DemoState) -> dict[str, Any]:
     package_state = {
         DemoState.READY: "absent",
         DemoState.REPLAYED: "absent",
@@ -56,7 +72,7 @@ def _package(fixture: FixedDemoFixture, state: DemoState) -> dict[str, Any]:
     }
 
 
-def _demo_view(value: DemoStatus, fixture: FixedDemoFixture) -> dict[str, Any]:
+def _demo_view(value: DemoStatus, fixture: DemoFixture) -> dict[str, Any]:
     completed = {
         DemoState.READY: [],
         DemoState.REPLAYED: ["replay-evidence"],

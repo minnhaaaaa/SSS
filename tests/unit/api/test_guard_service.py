@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sss_api.demo_composition import ExasolDemoEvidenceProvider
 from sss_api.events import EventBroker
-from sss_api.services.guard import ExasolDemoEvidenceProvider, GuardService
+from sss_api.services.guard import GuardService
 from sss_api.services.interventions import InterventionStatus, InterventionStore
 from sss_core import (
     CandidateStatus,
