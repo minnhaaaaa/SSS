@@ -31,7 +31,7 @@ export class ApiEventStream implements EventStreamService {
 
   public connect(handlers: EventHandlers): void {
     this.close();
-    const url = new URL("/v1/events", this.config.apiBaseUrl);
+    const url = new URL("/v1/public/events", this.config.apiBaseUrl);
     const source = this.factory(url, { withCredentials: true });
     for (const eventType of EVENT_TYPES) {
       source.addEventListener(eventType, (event) => {

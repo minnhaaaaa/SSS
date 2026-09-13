@@ -34,7 +34,7 @@ export function loadRuntimeConfig(values: RuntimeValues, applicationOrigin: stri
   return {
     apiBaseUrl: new URL(apiBaseUrl.toString().replace(/\/$/, "")),
     httpTimeoutMs,
-    prototypeDataEnabled: parseBoolean(values.VITE_SSS_USE_PROTOTYPE_DATA, true),
+    prototypeDataEnabled: parseBoolean(values.VITE_SSS_USE_PROTOTYPE_DATA, false),
   };
 }
 

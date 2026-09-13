@@ -50,6 +50,22 @@ def _executable_map(values: Mapping[str, str]) -> Mapping[str, Path]:
 
 
 @dataclass(frozen=True, slots=True)
+class OperatorSettings:
+    """Minimal configuration required to review Guard interventions."""
+
+    api_url: str
+    api_token: str | None
+
+    @classmethod
+    def from_env(cls, values: Mapping[str, str] | None = None) -> OperatorSettings:
+        source = environ if values is None else values
+        return cls(
+            api_url=_http_url(source, "SSS_API_URL"),
+            api_token=source.get("SSS_API_TOKEN") or None,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class CliSettings:
     api_url: str
     gateway_url: str

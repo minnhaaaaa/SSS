@@ -112,7 +112,7 @@ export function OverviewRadar({ nodes, onSelectPackage, stats = [], legendStats 
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className="min-w-0 flex-1 bg-transparent font-mono text-[0.62rem] text-[#FFF9F4] outline-none placeholder:text-[#FFF9F4]/58 focus-visible:outline-none"
-            placeholder="synthetic-npm-name"
+            placeholder="@sss-demo/reserved-synthetic"
           />
         </label>
 

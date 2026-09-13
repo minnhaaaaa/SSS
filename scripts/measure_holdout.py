@@ -12,6 +12,7 @@ from sss_core.measurement import evaluate_demo_metrics, evaluate_holdout
 ROOT = Path(__file__).parents[1]
 DATASET = ROOT / "data/holdout/mentions-v1.jsonl"
 REPORT = ROOT / "docs/measurements/holdout-v1.json"
+RUNTIME = ROOT / "docs/measurements/guard-runtime-v1.json"
 
 
 def build_report() -> dict[str, object]:
@@ -31,12 +32,10 @@ def build_report() -> dict[str, object]:
     extraction_values = asdict(extraction)
     extraction_values["scope"] = "controlled deterministic seed corpus"
     demo_values = asdict(demo)
-    runtime = {
-        "guard_p50_ms": demo_values.pop("guard_p50_ms"),
-        "guard_p95_ms": demo_values.pop("guard_p95_ms"),
-        "non_execution_invariant": demo_values.pop("non_execution_invariant"),
-        "owner": "Teammate 2 integration/E2E",
-    }
+    demo_values.pop("guard_p50_ms")
+    demo_values.pop("guard_p95_ms")
+    demo_values.pop("non_execution_invariant")
+    runtime = json.loads(RUNTIME.read_text(encoding="utf-8"))
     return {
         "dataset": {
             "path": "data/holdout/mentions-v1.jsonl",

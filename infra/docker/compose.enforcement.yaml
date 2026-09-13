@@ -131,7 +131,10 @@ services:
       context: ../..
       dockerfile: infra/docker/agent.Dockerfile
       args:
-        SSS_AGENT_BASE_IMAGE: ${SSS_AGENT_BASE_IMAGE:?Set a digest-pinned agent image}
+        SSS_NODE_BASE_IMAGE: ${SSS_NODE_BASE_IMAGE:?Set a digest-pinned Node image}
+        SSS_PYTHON_BASE_IMAGE: ${SSS_PYTHON_BASE_IMAGE:?Set a digest-pinned Python image}
+        SSS_UV_VERSION: ${SSS_UV_VERSION:?Set the pinned uv version}
+        SSS_PNPM_VERSION: ${SSS_PNPM_VERSION:-10.31.0}
     environment:
       SSS_API_URL: http://api:8000
       SSS_GATEWAY_URL: http://gateway:8080

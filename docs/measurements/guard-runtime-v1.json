@@ -1,0 +1,11 @@
+{
+  "guard_p50_ms": 16.041,
+  "guard_p95_ms": 38.315,
+  "max_ms": 47.125,
+  "min_ms": 14.817,
+  "non_execution_invariant": true,
+  "protocol": "HTTP loopback to the local Exasol-backed Guard API",
+  "samples": 50,
+  "scope": "one Linux x86-64 development host; five warm-up calls excluded",
+  "verified_sequence": "unprotected canary 0->1; protected agent exit 23; canary remained 1"
+}

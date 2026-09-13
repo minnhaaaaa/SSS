@@ -16,6 +16,7 @@ export SSS_PROJECT_ID=project-demo
 export SSS_AGENT_FAMILY=codex
 export SSS_DEMO_ARTIFACT_SHA256=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 export SSS_APPROVAL_SIGNING_KEY=${SSS_APPROVAL_SIGNING_KEY:-demo-only-signing-key-not-for-production}
+export SSS_RUNTIME_ROOT="$repo_root"
 
 case "${1:-help}" in
   api)

@@ -11,7 +11,7 @@ import type {
 } from "../domain/control-room";
 import type { ControlRoomService } from "./control-room";
 
-const TARGET_PACKAGE = "synthetic-npm-name";
+const TARGET_PACKAGE = "@sss-demo/reserved-synthetic";
 
 const packages: readonly PackageSummary[] = [
   packageSummary("pkg-001", TARGET_PACKAGE, "npm", "blocked", 95, 75, 7),
@@ -45,7 +45,7 @@ const packages: readonly PackageSummary[] = [
 ];
 
 const absenceConfidence: Readonly<Record<string, number>> = {
-  [TARGET_PACKAGE]: 98,
+  [TARGET_PACKAGE]: 100,
   "neural-optimizer-core": 91,
   "agent-memory-kit": 94,
   "llm-orchestration-base": 87,
@@ -81,12 +81,9 @@ const evidenceByPackage: Readonly<Record<string, readonly EvidenceItem[]>> = {
 };
 
 const decisions: readonly DecisionItem[] = [
-  decision("dec-001", TARGET_PACKAGE, "npm", "block", "TEMPORAL_PACKAGE_RISK_V1", 7, [
-    "historical_absence_confirmed",
-    "repeated_recommendations_confirmed",
-    "package_registration_detected",
-    "installation_attempt_detected",
-    "temporal_risk_threshold_exceeded",
+  decision("dec-001", TARGET_PACKAGE, "npm", "block", "sss-hackathon-v3", 43, [
+    "REGISTERED_AFTER_HALLUCINATION",
+    "HIGH_GLOBAL_RECURRENCE",
   ], false, false),
   decision("dec-002", "neural-optimizer-core", "npm", "review", "TEMPORAL_PACKAGE_RISK_V1", 25, [
     "registration_transition_detected",
@@ -115,6 +112,9 @@ const initialDemoStatus: DemoStatus = {
   protectedCanaryCount: 0,
   packageManagerStarted: null,
   message: "Controlled scenario ready. No package code has been executed.",
+  scores: { absenceConfidence: 100, targetAttractiveness: 95, packagePolicyRisk: 75 },
+  policyVersion: "sss-hackathon-v3",
+  registrationAgeMinutes: 43,
 };
 
 export class PrototypeControlRoomApi implements ControlRoomService {
@@ -215,6 +215,9 @@ export class PrototypeControlRoomApi implements ControlRoomService {
         protectedCanaryCount: 0,
         packageManagerStarted: null,
         message: "Historical absence and recommendation evidence replayed.",
+        scores: { absenceConfidence: 100, targetAttractiveness: 95, packagePolicyRisk: 75 },
+        policyVersion: "sss-hackathon-v3",
+        registrationAgeMinutes: 43,
       };
     } else if (action === "register-target") {
       this.demoStatus = {

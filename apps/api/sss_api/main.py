@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from os import environ
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -14,7 +15,7 @@ from sss_api.config import ApiSettings
 from sss_api.events import EventBroker
 from sss_api.middleware.body_limit import RequestBodyLimitMiddleware
 from sss_api.middleware.request_id import RequestIdMiddleware
-from sss_api.routes import approvals, attempts, demo, events, guard, health, interventions
+from sss_api.routes import approvals, attempts, demo, events, guard, health, interventions, public
 from sss_api.services.approvals import ApprovalService
 from sss_api.services.attempts import AttemptStore
 from sss_api.services.demo import DemoController, NoopDemoRepository
@@ -26,7 +27,7 @@ from sss_api.services.guard import (
 )
 from sss_api.services.interventions import InterventionStore
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(environ.get("SSS_RUNTIME_ROOT", Path.cwd())).resolve()
 
 
 def create_app(
@@ -42,6 +43,8 @@ def create_app(
     resolved_settings = settings or ApiSettings.from_env()
     app = FastAPI(title="SSS API", version="0.1.0")
     app.state.settings = resolved_settings
+    fixture = load_demo_fixture(ROOT / "demo/fixtures/fixed-intelligence.json")
+    app.state.demo_fixture = fixture
     broker = event_broker or EventBroker(capacity=resolved_settings.sse_buffer_size)
     store = intervention_store or InterventionStore()
     attempts_store = install_attempt_store or AttemptStore()
@@ -50,8 +53,6 @@ def create_app(
             signing_key=resolved_settings.approval_signing_key.encode()
         )
     if guard_service is None:
-        fixture_path = ROOT / "demo/fixtures/fixed-intelligence.json"
-        fixture = load_demo_fixture(fixture_path)
         evidence_provider: EvidenceProvider = FixedDemoEvidenceProvider(fixture)
         if resolved_settings.exasol_required:
             import pyexasol  # type: ignore[import-untyped]
@@ -88,6 +89,7 @@ def create_app(
     app.add_middleware(RequestBodyLimitMiddleware, max_bytes=resolved_settings.max_body_bytes)
     app.add_middleware(RequestIdMiddleware)
     app.include_router(health.router)
+    app.include_router(public.router)
     app.include_router(events.router)
     app.include_router(guard.router)
     app.include_router(interventions.router)

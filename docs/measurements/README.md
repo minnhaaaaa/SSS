@@ -10,8 +10,11 @@ the dataset must be re-hashed and disagreements documented after that merge. Nul
 must never be presented as agreement.
 
 The demo evidence rates are also labelled synthetic replay. They prove metric calculation and fixed
-fixture consistency, not a population estimate. Guard p50/p95 and the non-execution invariant remain
-null until Teammate 2's integrated protected-workspace run supplies real measurements.
+fixture consistency, not a population estimate. The runtime result comes from 50 measured loopback
+HTTP decisions against the local Exasol-backed API after five warm-up calls. It is a single-host
+rehearsal measurement, not a service-level objective. The non-execution invariant is backed by the
+verified sequence in which the unprotected canary moved from zero to one, the protected agent exited
+`23`, and the canary remained one.
 
 Regenerate and validate:
 

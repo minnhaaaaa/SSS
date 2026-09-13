@@ -14,7 +14,7 @@ describe("loadRuntimeConfig", () => {
 
     expect(config.apiBaseUrl.toString()).toBe("https://api.example.test/");
     expect(config.httpTimeoutMs).toBe(2500);
-    expect(config.prototypeDataEnabled).toBe(true);
+    expect(config.prototypeDataEnabled).toBe(false);
   });
 
   it("rejects credentials in a browser-visible URL", () => {

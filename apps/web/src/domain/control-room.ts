@@ -91,6 +91,13 @@ export interface DemoStatus {
   readonly protectedCanaryCount: number;
   readonly packageManagerStarted: boolean | null;
   readonly message: string | null;
+  readonly scores: {
+    readonly absenceConfidence: number;
+    readonly targetAttractiveness: number;
+    readonly packagePolicyRisk: number;
+  };
+  readonly policyVersion: string;
+  readonly registrationAgeMinutes: number;
 }
 
 export interface HealthData {

@@ -21,8 +21,9 @@ def _compose_config() -> dict[str, Any]:
     environment = {
         **os.environ,
         "SSS_PYTHON_BASE_IMAGE": "local-python-test-image",
+        "SSS_NODE_BASE_IMAGE": "local-node-test-image",
         "SSS_UV_VERSION": "local-test-version",
-        "SSS_AGENT_BASE_IMAGE": "local-agent-test-image",
+        "SSS_PNPM_VERSION": "local-pnpm-test-version",
         "SSS_API_BEARER_TOKENS": "local-configuration-token",
         "SSS_GATEWAY_UPSTREAMS_JSON": '{"npm":"https://registry.example.test"}',
         "SSS_CANARY_TOKEN": "local-canary-token",

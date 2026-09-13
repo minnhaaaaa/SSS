@@ -8,7 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from sss_cli.config import CliSettings
+from sss_cli.config import CliSettings, OperatorSettings
 from sss_cli.doctor import check_http_service
 from sss_cli.intervene import HttpInterventionClient, run_intervention
 from sss_cli.protect import ProtectedLauncher
@@ -54,7 +54,7 @@ def intervene(
     watch: bool = typer.Option(False, "--watch", help="Continue watching for interventions."),
 ) -> None:
     """Review blocked agent installs from a separate operator terminal."""
-    settings = CliSettings.from_env()
+    settings = OperatorSettings.from_env()
     if settings.api_token is None:
         console.print("SSS_API_TOKEN is required for operator intervention.")
         raise typer.Exit(code=2)

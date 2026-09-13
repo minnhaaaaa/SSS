@@ -139,6 +139,23 @@ sss/
 
 Cut order if behind: MCP first, live provider adapter second, Yarn/npx edge cases third. Never cut the registration transition, npm+PyPI registry checks, Exasol analytics, protected pnpm block, or evidence UI.
 
+### Implementation status on `codex/agent-guard-demo`
+
+- [x] Teammate 1 Tasks 1–6 are implemented: frozen domain/contracts, safe extraction,
+  ordered Exasol migrations and repositories, registry oracles and immutable transitions,
+  scheduled collectors, deterministic scoring/policy, redaction, and exact-scope approvals.
+- [x] The integrated terminal-first path from Tasks 7–9 is runnable: a coding agent delegates
+  to the `pnpm` shim, Guard reads Exasol-backed evidence, blocks with exit `23`, records an
+  intervention, and never starts the package manager.
+- [x] The zero-cost local demo in Task 11 is repeatable against local Exasol Docker Edition and
+  a TLS-controlled npm origin; the optional read-only UI consumes only redacted public routes.
+- [x] Local measurements record 50 Exasol-backed Guard calls and the protected non-execution
+  invariant in `docs/measurements/guard-runtime-v1.json`.
+- [ ] Task 12 is not a whole-team completion yet: the committed holdout records zero Teammate 2
+  overlap labels, and final Figma approval, pitch assets, video, and submission packaging are not
+  present in this branch. Paid cloud deployment is intentionally omitted in favor of the approved
+  no-cost local profile.
+
 ---
 
 ### Task 1: Bootstrap contracts and cross-ecosystem domain

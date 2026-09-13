@@ -14,6 +14,14 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = ROOT / "infra" / "docker" / "compose.enforcement.yaml"
+DEFAULT_PYTHON_IMAGE = (
+    "python:3.12.10-slim-bookworm@"
+    "sha256:fd95fa221297a88e1cf49c55ec1828edd7c5a428187e67b5d1805692d11588db"
+)
+DEFAULT_NODE_IMAGE = (
+    "node:22.19.0-bookworm-slim@"
+    "sha256:4a4884e8a44826194dff92ba316264f392056cbe243dcc9fd3551e71cea02b90"
+)
 
 
 def _run(
@@ -41,12 +49,13 @@ def _free_port() -> str:
 
 
 def _local_python_digest(docker_executable: str) -> str:
+    requested_image = os.environ.get("SSS_TEST_PYTHON_IMAGE", DEFAULT_PYTHON_IMAGE)
     completed = subprocess.run(
         [
             docker_executable,
             "image",
             "inspect",
-            "python:3.12-slim",
+            requested_image,
             "--format",
             "{{index .RepoDigests 0}}",
         ],
@@ -58,7 +67,7 @@ def _local_python_digest(docker_executable: str) -> str:
     )
     digest = completed.stdout.strip()
     if completed.returncode or not digest:
-        pytest.skip("a local python:3.12-slim image with a repository digest is required")
+        pytest.skip(f"the pinned local Python test image is required: {requested_image}")
     return digest
 
 
@@ -101,8 +110,9 @@ def test_live_compose_security_and_local_canary() -> None:
     environment = {
         **os.environ,
         "SSS_PYTHON_BASE_IMAGE": base_image,
+        "SSS_NODE_BASE_IMAGE": os.environ.get("SSS_TEST_NODE_IMAGE", DEFAULT_NODE_IMAGE),
         "SSS_UV_VERSION": "0.12.13",
-        "SSS_AGENT_BASE_IMAGE": base_image,
+        "SSS_PNPM_VERSION": "10.31.0",
         "SSS_API_BEARER_TOKENS": api_token,
         "SSS_GATEWAY_UPSTREAMS_JSON": '{"pypi":"https://pypi.org"}',
         "SSS_CANARY_TOKEN": canary_token,
@@ -136,8 +146,9 @@ def test_live_compose_security_and_local_canary() -> None:
             "run",
             "--rm",
             "--no-deps",
-            "protected-agent",
+            "--entrypoint",
             "python",
+            "protected-agent",
             "-c",
             (
                 "import urllib.request; "
@@ -173,8 +184,9 @@ else:
             "run",
             "--rm",
             "--no-deps",
-            "protected-agent",
+            "--entrypoint",
             "python",
+            "protected-agent",
             "-c",
             boundary_script,
         )

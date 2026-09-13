@@ -42,7 +42,7 @@ describe("ControlRoomApi", () => {
       recentActivity: [],
     });
     expect(fetchImplementation.mock.calls[0]?.[0].toString()).toBe(
-      "https://api.example.test/api/overview",
+      "https://api.example.test/v1/public/overview",
     );
   });
 
@@ -65,7 +65,7 @@ describe("ControlRoomApi", () => {
     await api.getPackage("@scope/tool name");
 
     expect(fetchImplementation.mock.calls[0]?.[0].toString()).toBe(
-      "https://api.example.test/api/packages/%40scope%2Ftool%20name",
+      "https://api.example.test/v1/public/packages/%40scope%2Ftool%20name",
     );
   });
 
@@ -87,30 +87,13 @@ describe("ControlRoomApi", () => {
     await expect(api.getOverview()).rejects.toBeInstanceOf(ApiContractError);
   });
 
-  it("uses a POST and a fresh idempotency key for a real demo action", async () => {
-    const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse({
-        state: "running",
-        completed_steps: ["replay-evidence"],
-        available_actions: ["register-target"],
-        target_package: null,
-        unprotected_canary_count: 0,
-        protected_canary_count: 0,
-        package_manager_started: null,
-        message: null,
-      }),
-    );
+  it("does not simulate or expose demo mutations in live browser mode", async () => {
+    const fetchImplementation = vi.fn<typeof fetch>();
     const api = new ControlRoomApi(new ApiClient(config, fetchImplementation));
 
-    await api.runDemoAction("replay-evidence");
-
-    const request = fetchImplementation.mock.calls[0];
-    expect(request?.[0].toString()).toBe(
-      "https://api.example.test/api/demo/replay-evidence",
+    await expect(api.runDemoAction("replay-evidence")).rejects.toThrow(
+      "Run the terminal-first demo from the operator shell",
     );
-    expect(request?.[1]?.method).toBe("POST");
-    expect(new Headers(request?.[1]?.headers).get("Idempotency-Key")).toMatch(
-      /^[0-9a-f-]{36}$/i,
-    );
+    expect(fetchImplementation).not.toHaveBeenCalled();
   });
 });

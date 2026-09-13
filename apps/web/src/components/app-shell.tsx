@@ -23,22 +23,25 @@ export function AppShell() {
   const statusLabel = dataMode === "prototype"
     ? "DEMO MODE"
     : apiConnection === "online"
-      ? "SYSTEM ACTIVE"
+      ? "AGENT PROTECTED"
       : "SYSTEM CHECK";
+  const visibleNavigation = dataMode === "live"
+    ? navigation.filter(({ path }) => path === "/demo")
+    : navigation;
 
   return (
     <div className="relative min-h-screen bg-[#0C0F0C]">
       <NavLink
         className="absolute top-[30px] left-[clamp(18px,2.1vw,30px)] z-30 hidden h-[58px] w-[58px] items-center justify-center xl:flex"
         to="/"
-        aria-label="SSS dashboard"
+        aria-label="SSS agent protection"
       >
         <img className="h-[58px] w-[58px] object-contain" src="/sss-logo.svg" alt="SSS" />
       </NavLink>
 
       <nav className="overview-nav-scroll fixed top-[30px] left-1/2 z-50 flex h-[48px] w-[min(756px,calc(100vw-32px))] -translate-x-1/2 items-center overflow-x-auto rounded-full border border-[#FFF9F4]/14 bg-[#0D0F0D]/95 p-[6px] shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-md" aria-label="Primary navigation">
         <div className="flex min-w-max flex-1 items-center justify-between gap-0.5">
-          {navigation.map(({ path, label }) => (
+          {visibleNavigation.map(({ path, label }) => (
             <NavLink
               key={path}
               to={path}

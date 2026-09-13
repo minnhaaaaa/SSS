@@ -51,9 +51,19 @@ export function DemoPage() {
       description={
         dataMode === "prototype"
           ? "Walk through the temporary replay, registration, and isolated enforcement sequence."
-          : "Run the real replay, registration, and isolated enforcement sequence."
+          : "The dashboard is optional evidence. Run the real protection flow in the coding-agent and operator terminals."
       }
     >
+      {dataMode === "live" && (
+        <Panel eyebrow="Primary demo surface" title="Agent protection active">
+          <p className="demo-message">
+            <Terminal aria-hidden="true" /> Agent: <code>./scripts/demo.sh agent</code>
+          </p>
+          <p className="demo-message">
+            <Shield aria-hidden="true" /> Operator: <code>./scripts/demo.sh operator</code>
+          </p>
+        </Panel>
+      )}
       {resource.loading && <LoadingState label="Reading demo state" />}
       {resource.error && <ErrorState error={resource.error} retry={resource.reload} />}
       {actionError && <ErrorState error={actionError} retry={resource.reload} />}
@@ -117,15 +127,21 @@ function DemoExperience({
                 <strong>{action.label}</strong>
                 <small>{action.detail}</small>
               </div>
-              <button
-                className="button button--action"
-                type="button"
-                disabled={!available || pending !== null}
-                onClick={() => void execute(action.id)}
-              >
-                {pending === action.id ? <CircleDotDashed className="spin" aria-hidden="true" /> : <Play aria-hidden="true" />}
-                {complete ? (available ? "Run again" : "Complete") : "Run"}
-              </button>
+              {dataMode === "prototype" ? (
+                <button
+                  className="button button--action"
+                  type="button"
+                  disabled={!available || pending !== null}
+                  onClick={() => void execute(action.id)}
+                >
+                  {pending === action.id ? <CircleDotDashed className="spin" aria-hidden="true" /> : <Play aria-hidden="true" />}
+                  {complete ? (available ? "Run again" : "Complete") : "Run"}
+                </button>
+              ) : (
+                <span className="button button--action" aria-label={`${action.label}: terminal controlled`}>
+                  <Terminal aria-hidden="true" /> Terminal
+                </span>
+              )}
             </li>
           );
         })}
@@ -154,9 +170,33 @@ function DemoExperience({
         />
       </section>
 
+      <section className="proof-grid" aria-label="Frozen policy evidence" data-reveal>
+        <ProofTile
+          label="Absence confidence"
+          value={status.scores.absenceConfidence}
+          detail={`${status.registrationAgeMinutes} minute registration transition`}
+          icon={Shield}
+          tone="signal"
+        />
+        <ProofTile
+          label="Target attractiveness"
+          value={status.scores.targetAttractiveness}
+          detail="46 verified recommendations"
+          icon={TriangleAlert}
+          tone="danger"
+        />
+        <ProofTile
+          label="Package policy risk"
+          value={status.scores.packagePolicyRisk}
+          detail={status.policyVersion}
+          icon={Ban}
+          tone="danger"
+        />
+      </section>
+
       {status.message && (
         <Panel eyebrow="Lab response" title="Latest Result">
-          <p className="demo-message"><Radio aria-hidden="true" /> {status.message}</p>
+          <p className="demo-message" aria-live="polite"><Radio aria-hidden="true" /> {status.message}</p>
         </Panel>
       )}
     </div>

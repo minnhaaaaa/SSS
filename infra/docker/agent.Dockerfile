@@ -27,6 +27,10 @@ ENV UV_COMPILE_BYTECODE=1 \
 RUN python -m pip install --no-cache-dir "uv==${SSS_UV_VERSION}" \
     && corepack enable pnpm \
     && corepack prepare "pnpm@${SSS_PNPM_VERSION}" --activate \
+    && cp -a "/root/.cache/node/corepack/v1/pnpm/${SSS_PNPM_VERSION}" /opt/pnpm \
+    && rm /usr/local/bin/pnpm /usr/local/bin/pnpx \
+    && ln -s /opt/pnpm/bin/pnpm.cjs /usr/local/bin/pnpm \
+    && ln -s /opt/pnpm/bin/pnpx.cjs /usr/local/bin/pnpx \
     && uv sync --frozen --no-dev --no-editable \
     && mkdir -p /opt/sss/shims /workspace \
     && cp apps/cli/sss_cli/shims/pnpm /opt/sss/shims/pnpm \

@@ -40,23 +40,23 @@ export class ControlRoomApi implements ControlRoomService {
   }
 
   public async getOverview(signal?: AbortSignal): Promise<OverviewData> {
-    return parseOverview(await this.client.request<unknown>("/api/overview", withSignal(signal)));
+    return parseOverview(await this.client.request<unknown>("/v1/public/overview", withSignal(signal)));
   }
 
   public async getPackages(signal?: AbortSignal): Promise<readonly PackageSummary[]> {
     return parseList(
-      await this.client.request<unknown>("/api/packages", withSignal(signal)),
+      await this.client.request<unknown>("/v1/public/packages", withSignal(signal)),
       parsePackageSummary,
     );
   }
 
   public async getPackage(name: string, signal?: AbortSignal): Promise<PackageDetail> {
-    const path = `/api/packages/${encodeURIComponent(name)}`;
+    const path = `/v1/public/packages/${encodeURIComponent(name)}`;
     return parsePackageDetail(await this.client.request<unknown>(path, withSignal(signal)));
   }
 
   public async getEvidence(name: string, signal?: AbortSignal): Promise<readonly EvidenceItem[]> {
-    const path = `/api/evidence/${encodeURIComponent(name)}`;
+    const path = `/v1/public/evidence/${encodeURIComponent(name)}`;
     return parseList(
       await this.client.request<unknown>(path, withSignal(signal)),
       parseEvidence,
@@ -65,26 +65,23 @@ export class ControlRoomApi implements ControlRoomService {
 
   public async getDecisions(signal?: AbortSignal): Promise<readonly DecisionItem[]> {
     return parseList(
-      await this.client.request<unknown>("/api/decisions", withSignal(signal)),
+      await this.client.request<unknown>("/v1/public/decisions", withSignal(signal)),
       parseDecision,
     );
   }
 
   public async getCoverage(signal?: AbortSignal): Promise<CoverageData> {
-    return parseCoverage(await this.client.request<unknown>("/api/coverage", withSignal(signal)));
+    return parseCoverage(await this.client.request<unknown>("/v1/public/coverage", withSignal(signal)));
   }
 
   public async getDemoStatus(signal?: AbortSignal): Promise<DemoStatus> {
-    return parseDemoStatus(await this.client.request<unknown>("/api/demo", withSignal(signal)));
+    return parseDemoStatus(await this.client.request<unknown>("/v1/public/demo", withSignal(signal)));
   }
 
   public async runDemoAction(action: DemoAction, signal?: AbortSignal): Promise<DemoStatus> {
-    const payload = await this.client.request<unknown>(`/api/demo/${action}`, {
-      method: "POST",
-      idempotencyKey: crypto.randomUUID(),
-      ...withSignal(signal),
-    });
-    return parseDemoStatus(payload);
+    void action;
+    void signal;
+    throw new Error("Run the terminal-first demo from the operator shell");
   }
 }
 
@@ -211,6 +208,13 @@ function parseDemoStatus(value: unknown): DemoStatus {
     protectedCanaryCount: number(object, "protected_canary_count"),
     packageManagerStarted: nullableBoolean(object, "package_manager_started"),
     message: nullableString(object, "message"),
+    scores: {
+      absenceConfidence: number(record(object.scores, "scores"), "absence_confidence"),
+      targetAttractiveness: number(record(object.scores, "scores"), "target_attractiveness"),
+      packagePolicyRisk: number(record(object.scores, "scores"), "package_policy_risk"),
+    },
+    policyVersion: string(object, "policy_version"),
+    registrationAgeMinutes: number(object, "registration_age_minutes"),
   };
 }
 
