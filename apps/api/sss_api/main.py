@@ -62,9 +62,6 @@ def create_app(
     *,
     settings: ApiSettings | None = None,
     service_factory: ServiceFactory | None = None,
-    event_broker: EventBroker | None = None,
-    guard_service: GuardService | None = None,
-    intervention_store: InterventionStore | None = None,
     install_attempt_store: AttemptStore | None = None,
     approval_service: ApprovalService | None = None,
     demo_controller: object | None = None,
@@ -80,9 +77,9 @@ def create_app(
     app = FastAPI(title="SSS API", version="0.1.0")
     app.state.settings = resolved_settings
     app.state.runtime_mode = resolved_settings.runtime_mode
-    app.state.event_broker = event_broker or services.event_broker
-    app.state.guard_service = guard_service or services.guard_service
-    app.state.intervention_store = intervention_store or services.intervention_store
+    app.state.event_broker = services.event_broker
+    app.state.guard_service = services.guard_service
+    app.state.intervention_store = services.intervention_store
     app.state.install_attempt_store = install_attempt_store or services.install_attempt_store
     app.state.approval_service = approval_service or services.approval_service
 
