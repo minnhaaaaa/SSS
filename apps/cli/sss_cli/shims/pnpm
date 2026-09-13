@@ -1,2 +1,2 @@
 #!/bin/sh
-exec python -m sss_cli.shim pnpm "$@"
+exec /opt/sss/.venv/bin/python -m sss_cli.shim pnpm "$@"

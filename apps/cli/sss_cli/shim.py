@@ -9,6 +9,7 @@ from pathlib import Path
 from sss_cli.adapters import HttpGuardClient
 from sss_cli.config import CliSettings
 from sss_cli.guard import GuardRunner
+from sss_cli.manager_environment import build_manager_environment
 from sss_cli.process import SafeProcessRunner
 
 
@@ -23,15 +24,21 @@ def main(argv: list[str] | None = None) -> int:
         print("SSS BLOCK — API token is not configured")
         return 23
     runner = GuardRunner(
-        client=HttpGuardClient(api_url=settings.api_url, token=settings.api_token),
+        client=HttpGuardClient(
+            api_url=settings.api_url,
+            token=settings.api_token,
+            approval_token=settings.approval_token,
+            approval_nonce=settings.approval_nonce,
+        ),
         process_runner=SafeProcessRunner(executables=settings.real_executables),
         registry_origin=settings.npm_registry_url,
         project_id=settings.project_id,
         agent_family=settings.agent_family,
         artifact_sha256=settings.demo_artifact_sha256,
         cwd=Path.cwd().resolve(),
-        environment=environ,
+        environment=build_manager_environment(settings, environ),
         write=print,
+        pypi_registry_origin=settings.pypi_registry_url,
     )
     return runner.run(manager, manager_arguments)
 

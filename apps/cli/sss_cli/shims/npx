@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /opt/sss/.venv/bin/python -m sss_cli.shim npx "$@"
