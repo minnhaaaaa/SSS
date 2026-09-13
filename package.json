@@ -7,6 +7,8 @@
   },
   "scripts": {
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "web:test": "pnpm --filter @sss/web test",
+    "web:typecheck": "pnpm --filter @sss/web typecheck"
   }
 }

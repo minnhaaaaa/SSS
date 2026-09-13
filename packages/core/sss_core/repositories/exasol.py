@@ -275,7 +275,7 @@ class ExasolDemoRepository:
         )
         for table in identity_tables:
             self._connection.execute(
-                f"DELETE FROM {table} WHERE ECOSYSTEM={{ecosystem}} "
+                f"DELETE FROM {table} WHERE ECOSYSTEM={{ecosystem}} "  # noqa: S608
                 "AND REGISTRY_ORIGIN={registry_origin} AND CANONICAL_NAME={canonical_name}",
                 parameters,
             )

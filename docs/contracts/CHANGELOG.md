@@ -2,6 +2,8 @@
 
 ## 2026-09-13
 
+- Integrated the enforcement API, CLI, gateway and canary apps as consumers of the frozen
+  Teammate 1 domain, approval and fixture contracts; no contract semantics changed.
 - Published stable `sss_core` package-root imports and the complete shared JSON/OpenAPI example
   set for observations, registry evidence, Radar, Guard, attempts, approvals and public aggregates.
 - Froze extractor outputs for each supported Python/npm client and the exact approved PyPI/npm

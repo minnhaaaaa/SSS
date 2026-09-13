@@ -1,0 +1,20 @@
+{
+  "name": "@sss/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": ">=19 <20",
+    "react-dom": ">=19 <20"
+  },
+  "devDependencies": {
+    "@types/react": ">=19 <20",
+    "@types/react-dom": ">=19 <20",
+    "typescript": ">=5.7 <6",
+    "vitest": ">=3 <5"
+  }
+}

@@ -1,0 +1,1 @@
+"""Isolated demo canary service."""
