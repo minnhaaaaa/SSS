@@ -25,6 +25,8 @@ from sss_core.domain import (
     PolicyDecision,
     RegistryStatus,
 )
+from sss_core.evidence.facts import EvidenceFacts
+from sss_core.registries.base import RegistryOutcome
 from sss_core.repositories.operations import (
     ApprovalNonceConflict,
     IdempotencyClaim,
@@ -273,6 +275,73 @@ class ExasolRadarRepository:
         )
         return [{str(index): value for index, value in enumerate(row)} for row in _rows(result)]
 
+    def list_private_page(
+        self,
+        *,
+        limit: int = 100,
+        cursor: tuple[datetime, str] | None = None,
+    ) -> tuple[list[dict[str, object]], tuple[datetime, str] | None]:
+        if not 1 <= limit <= 200:
+            raise ValueError("limit must be between 1 and 200")
+        epoch = datetime(1970, 1, 1)
+        parameters: dict[str, object] = {"limit": limit + 1}
+        if cursor is not None:
+            parameters.update(cursor_time=_exasol_timestamp(cursor[0]), cursor_name=cursor[1])
+            query = (
+                "SELECT ECOSYSTEM, REGISTRY_ORIGIN, CANONICAL_NAME, STATUS, "
+                "FIRST_ABSENCE_AT, FIRST_REGISTRATION_AT, SYNTHETIC, "
+                "VERIFIED_MODEL_RECOMMENDATIONS, MODEL_CONFIGURATIONS, "
+                "PROTECTED_AGENT_ATTEMPTS, PUBLIC_FAILED_REFERENCES, OBSERVATION_DAYS, "
+                "HAS_EXPLICIT_CONTEXT FROM V_RADAR_PRIVATE WHERE "
+                "(COALESCE(FIRST_REGISTRATION_AT, FIRST_ABSENCE_AT, "
+                "TIMESTAMP '1970-01-01 00:00:00') < {cursor_time} OR "
+                "(COALESCE(FIRST_REGISTRATION_AT, FIRST_ABSENCE_AT, "
+                "TIMESTAMP '1970-01-01 00:00:00') = {cursor_time} "
+                "AND CANONICAL_NAME > {cursor_name})) ORDER BY "
+                "COALESCE(FIRST_REGISTRATION_AT, FIRST_ABSENCE_AT, "
+                "TIMESTAMP '1970-01-01 00:00:00') DESC, CANONICAL_NAME ASC "
+                "LIMIT {limit!d}"
+            )
+        else:
+            query = (
+                "SELECT ECOSYSTEM, REGISTRY_ORIGIN, CANONICAL_NAME, STATUS, "
+                "FIRST_ABSENCE_AT, FIRST_REGISTRATION_AT, SYNTHETIC, "
+                "VERIFIED_MODEL_RECOMMENDATIONS, MODEL_CONFIGURATIONS, "
+                "PROTECTED_AGENT_ATTEMPTS, PUBLIC_FAILED_REFERENCES, OBSERVATION_DAYS, "
+                "HAS_EXPLICIT_CONTEXT FROM V_RADAR_PRIVATE ORDER BY "
+                "COALESCE(FIRST_REGISTRATION_AT, FIRST_ABSENCE_AT, "
+                "TIMESTAMP '1970-01-01 00:00:00') DESC, CANONICAL_NAME ASC "
+                "LIMIT {limit!d}"
+            )
+        rows = list(
+            _rows(
+                self._connection.execute(query, parameters)
+            )
+        )
+        page_rows = rows[:limit]
+        columns = (
+            "ecosystem",
+            "registry_origin",
+            "canonical_name",
+            "status",
+            "first_absence_at",
+            "first_registration_at",
+            "synthetic",
+            "verified_model_recommendations",
+            "model_configurations",
+            "protected_agent_attempts",
+            "public_failed_references",
+            "observation_days",
+            "has_explicit_context",
+        )
+        items = [dict(zip(columns, row, strict=True)) for row in page_rows]
+        next_cursor = None
+        if len(rows) > limit and page_rows:
+            last = page_rows[-1]
+            sort_time = last[5] or last[4] or epoch
+            next_cursor = (_utc_timestamp(sort_time), str(last[2]))
+        return items, next_cursor
+
 
 class ExasolPolicyRepository:
     def __init__(self, connection: ExasolConnection) -> None:
@@ -280,9 +349,11 @@ class ExasolPolicyRepository:
 
     def load_evidence(self, *, ecosystem: str, origin: str, name: str) -> dict[str, object]:
         result = self._connection.execute(
-            "SELECT ECOSYSTEM, REGISTRY_ORIGIN, CANONICAL_NAME, STATUS, "
+            "SELECT ECOSYSTEM, REGISTRY_ORIGIN, CANONICAL_NAME, STATUS, FIRST_ABSENCE_AT, "
+            "FIRST_REGISTRATION_AT, "
             "VERIFIED_MODEL_RECOMMENDATIONS, MODEL_CONFIGURATIONS, "
             "PROTECTED_AGENT_ATTEMPTS, PUBLIC_FAILED_REFERENCES, OBSERVATION_DAYS "
+            ", HAS_EXPLICIT_CONTEXT "
             "FROM V_RADAR_PRIVATE WHERE ECOSYSTEM={ecosystem} "
             "AND REGISTRY_ORIGIN={origin} AND CANONICAL_NAME={name}",
             {"ecosystem": ecosystem, "origin": origin, "name": name},
@@ -295,13 +366,128 @@ class ExasolPolicyRepository:
             "REGISTRY_ORIGIN",
             "CANONICAL_NAME",
             "STATUS",
+            "FIRST_ABSENCE_AT",
+            "FIRST_REGISTRATION_AT",
             "VERIFIED_MODEL_RECOMMENDATIONS",
             "MODEL_CONFIGURATIONS",
             "PROTECTED_AGENT_ATTEMPTS",
             "PUBLIC_FAILED_REFERENCES",
             "OBSERVATION_DAYS",
+            "HAS_EXPLICIT_CONTEXT",
         )
         return dict(zip(columns, rows[0], strict=True))
+
+    def load_facts(self, package: PackageIdentity) -> EvidenceFacts:
+        parameters = {
+            "ecosystem": package.ecosystem.value,
+            "origin": package.registry_origin,
+            "name": package.canonical_name,
+        }
+        row = self.load_evidence(**parameters)
+        if not row:
+            return EvidenceFacts(
+                CandidateStatus.AMBIGUOUS,
+                RegistryOutcome.UNKNOWN_RESPONSE,
+                False,
+                False,
+                0,
+                0,
+                0,
+                0,
+                0,
+                False,
+                None,
+                False,
+                False,
+                datetime.now(UTC),
+            )
+        registry_rows = _rows(
+            self._connection.execute(
+                "SELECT STATUS, CHECKED_AT FROM REGISTRY_CHECKS WHERE ECOSYSTEM={ecosystem} "
+                "AND REGISTRY_ORIGIN={origin} AND CANONICAL_NAME={name} "
+                "ORDER BY CHECKED_AT DESC, CHECK_ID DESC LIMIT 1",
+                parameters,
+            )
+        )
+        observation_rows = _rows(
+            self._connection.execute(
+                "SELECT MAX(OBSERVED_AT) FROM PACKAGE_MENTIONS WHERE ECOSYSTEM={ecosystem} "
+                "AND REGISTRY_ORIGIN={origin} AND CANONICAL_NAME={name}",
+                parameters,
+            )
+        )
+        release_rows = _rows(
+            self._connection.execute(
+                "SELECT MIN(COALESCE(UPLOADED_AT, FIRST_SEEN_AT)) FROM PACKAGE_RELEASES "
+                "WHERE ECOSYSTEM={ecosystem} AND REGISTRY_ORIGIN={origin} "
+                "AND CANONICAL_NAME={name}",
+                parameters,
+            )
+        )
+        violation_rows = _rows(
+            self._connection.execute(
+                "SELECT COUNT(*) FROM V_SOURCE_POLICY_VIOLATIONS WHERE ECOSYSTEM={ecosystem} "
+                "AND REGISTRY_ORIGIN={origin} AND CANONICAL_NAME={name}",
+                parameters,
+            )
+        )
+        static_rows = _rows(
+            self._connection.execute(
+                "SELECT COUNT(*) FROM STATIC_FINDINGS F JOIN PACKAGE_RELEASES R "
+                "ON R.ARTIFACT_SHA256=F.ARTIFACT_SHA256 WHERE R.ECOSYSTEM={ecosystem} "
+                "AND R.REGISTRY_ORIGIN={origin} AND R.CANONICAL_NAME={name} "
+                "AND F.SEVERITY IN ('high','critical')",
+                parameters,
+            )
+        )
+        registry_status = str(registry_rows[0][0]) if registry_rows else "unknown"
+        registry_outcome = (
+            RegistryOutcome(registry_status)
+            if registry_status in {"registered", "absent"}
+            else RegistryOutcome.UNKNOWN_RESPONSE
+        )
+        timestamps: list[datetime] = []
+        for key in ("FIRST_ABSENCE_AT", "FIRST_REGISTRATION_AT"):
+            if row[key] is not None:
+                timestamps.append(_utc_timestamp(row[key]))  # type: ignore[arg-type]
+        if registry_rows:
+            timestamps.append(_utc_timestamp(registry_rows[0][1]))
+        if observation_rows and observation_rows[0][0] is not None:
+            timestamps.append(_utc_timestamp(observation_rows[0][0]))
+        data_as_of = max(timestamps, default=datetime.now(UTC))
+        first_release = (
+            _utc_timestamp(release_rows[0][0])
+            if release_rows and release_rows[0][0] is not None
+            else None
+        )
+        release_age = (
+            max(0.0, (data_as_of - first_release).total_seconds() / 3600)
+            if first_release is not None
+            else None
+        )
+        candidate_status = CandidateStatus(str(row["STATUS"]))
+        return EvidenceFacts(
+            candidate_status=candidate_status,
+            registry_outcome=registry_outcome,
+            conclusive_absence=candidate_status
+            in {
+                CandidateStatus.VERIFIED_ABSENT,
+                CandidateStatus.VERIFIED_HALLUCINATION,
+                CandidateStatus.REGISTERED_AFTER_ABSENCE,
+            },
+            exclusions_complete=registry_outcome
+            in {RegistryOutcome.ABSENT, RegistryOutcome.REGISTERED},
+            distinct_verified_runs=int(str(row["VERIFIED_MODEL_RECOMMENDATIONS"])),
+            distinct_model_configurations=int(str(row["MODEL_CONFIGURATIONS"])),
+            distinct_clients=int(str(row["PROTECTED_AGENT_ATTEMPTS"])),
+            distinct_public_sources=int(str(row["PUBLIC_FAILED_REFERENCES"])),
+            distinct_observation_days=int(str(row["OBSERVATION_DAYS"])),
+            explicit_install_context=bool(row["HAS_EXPLICIT_CONTEXT"]),
+            first_release_age_hours=release_age,
+            source_policy_violation=bool(violation_rows and int(violation_rows[0][0])),
+            suspicious_static_finding=bool(static_rows and int(static_rows[0][0])),
+            data_as_of=data_as_of,
+        )
 
 
 def _request_payload(request: InstallRequest) -> dict[str, object]:

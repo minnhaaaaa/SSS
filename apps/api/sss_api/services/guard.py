@@ -7,12 +7,22 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from sss_core import (
+    CandidateStatus,
     Decision,
+    EvidenceScores,
     InstallRequest,
     PackageIdentity,
     PolicyContext,
     PolicyDecision,
     PolicyEngine,
+)
+from sss_core.evidence.facts import EvidenceFacts
+from sss_core.evidence.scoring import (
+    AttractivenessInputs,
+    PolicyRiskInputs,
+    score_absence_confidence,
+    score_package_policy_risk,
+    score_target_attractiveness,
 )
 
 from sss_api.events import EventBroker
@@ -23,8 +33,57 @@ class EvidenceProvider(Protocol):
     def context_for(self, package: PackageIdentity) -> PolicyContext: ...
 
 
-class ExasolEvidenceProvider(EvidenceProvider, Protocol):
-    """Task-5 boundary for production facts loaded by canonical package identity."""
+class PolicyFactsRepository(Protocol):
+    def load_facts(self, package: PackageIdentity) -> EvidenceFacts: ...
+
+
+class ExasolEvidenceProvider(EvidenceProvider):
+    """Convert durable Exasol facts through the canonical scoring functions."""
+
+    def __init__(self, repository: PolicyFactsRepository) -> None:
+        self._repository = repository
+
+    def context_for(self, package: PackageIdentity) -> PolicyContext:
+        facts = self._repository.load_facts(package)
+        attractiveness = score_target_attractiveness(
+            AttractivenessInputs(
+                facts.distinct_verified_runs,
+                facts.distinct_model_configurations,
+                facts.distinct_clients,
+                facts.distinct_public_sources,
+                facts.distinct_observation_days,
+                facts.explicit_install_context,
+            )
+        )
+        scores = EvidenceScores(
+            score_absence_confidence(
+                conclusive_absence=facts.conclusive_absence,
+                valid_identity=True,
+                exclusions_complete=facts.exclusions_complete,
+            ),
+            attractiveness,
+            score_package_policy_risk(
+                PolicyRiskInputs(
+                    facts.candidate_status is CandidateStatus.REGISTERED_AFTER_ABSENCE,
+                    facts.first_release_age_hours,
+                    attractiveness,
+                    facts.source_policy_violation,
+                    facts.suspicious_static_finding,
+                )
+            ),
+        )
+        return PolicyContext(
+            candidate_status=facts.candidate_status,
+            registry_outcome=facts.registry_outcome,
+            scores=scores,
+            approved_source=not facts.source_policy_violation,
+            strict_mode=True,
+            interactive=False,
+            historical_hallucination=(
+                facts.candidate_status is CandidateStatus.REGISTERED_AFTER_ABSENCE
+                and facts.distinct_verified_runs > 0
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)

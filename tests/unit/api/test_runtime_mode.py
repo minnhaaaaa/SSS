@@ -225,7 +225,7 @@ async def test_service_container_keeps_guard_events_and_interventions_coherent(
     assert visible_interventions[0].intervention_id == assessment.intervention_id
 
 
-def test_production_composition_fails_clearly_until_exasol_provider_is_wired(
+def test_production_composition_wires_exasol_provider_and_durable_services(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -238,5 +238,20 @@ def test_production_composition_fails_clearly_until_exasol_provider_is_wired(
     }.items():
         monkeypatch.setenv(key, value)
 
-    with pytest.raises(ConfigurationError, match=r"incomplete.*ExasolEvidenceProvider"):
-        sss_api.main.build_production_services(settings)
+    import pyexasol
+
+    connection = Mock()
+    monkeypatch.setattr(pyexasol, "connect", Mock(return_value=connection))
+    monkeypatch.setattr(
+        sss_api.main.SchemaReadinessChecker,
+        "check",
+        Mock(return_value=Mock(ready=True)),
+    )
+
+    services = sss_api.main.build_production_services(settings)
+
+    assert services.exasol_connection is connection
+    assert services.observation_repository is not None
+    assert services.radar_repository is not None
+    assert services.operational_repository is not None
+    assert services.credential_audit_sink is not None
