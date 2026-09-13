@@ -30,6 +30,8 @@
 .dock-item {
   position: relative;
   display: inline-flex;
+  width: 100%;
+  height: 100%;
   min-width: 0;
   flex: 0 0 auto;
   align-items: center;
@@ -42,6 +44,11 @@
   box-shadow: none;
   outline: none;
   transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+
+.dock-item-motion {
+  position: relative;
+  flex: 0 0 auto;
 }
 
 .dock-item:hover,
@@ -81,6 +88,13 @@
   left: 50%;
   z-index: 2;
   width: max-content;
+  pointer-events: none;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.dock-label__content {
+  display: block;
   padding: 0.18rem 0.5rem;
   color: #fff9f4;
   background: #1e3b29;
@@ -89,19 +103,21 @@
   font-family: ui-monospace, "Cascadia Code", monospace;
   font-size: 0.62rem;
   line-height: 1.2;
-  pointer-events: none;
-  transform: translateX(-50%);
-  white-space: nowrap;
+}
+
+.dock-label--static {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.dock-item:hover .dock-label--static,
+.dock-item:focus-visible .dock-label--static {
+  visibility: visible;
+  opacity: 1;
 }
 
 @media (max-width: 48rem) {
   .dock-panel {
     max-width: calc(100vw - 2rem);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dock-item {
-    transform: none !important;
   }
 }

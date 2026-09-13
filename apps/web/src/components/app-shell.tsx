@@ -1,6 +1,6 @@
 import { FlaskConical, Gauge, LayoutDashboard, PackageSearch, Radar, RefreshCw, Scale, ShieldCheck, UserRound } from "lucide-react";
 import { useMemo, useState } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useControlRoom } from "../app/control-room-context";
 import Dock from "./dock";
@@ -18,7 +18,6 @@ const navigation = [
 export function AppShell() {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
   const { apiConnection, liveConnection, serviceName, lastEventType, dataMode, retryConnections } =
     useControlRoom();
 
@@ -32,10 +31,10 @@ export function AppShell() {
       .map(({ path, label, icon: Icon }) => ({
         icon: <Icon size={17} />,
         label,
-        active: path === "/" ? location.pathname === path : location.pathname.startsWith(path),
-        onClick: () => navigate(path),
+        to: path,
+        end: path === "/",
       })),
-    [dataMode, location.pathname, navigate],
+    [dataMode],
   );
 
   return (

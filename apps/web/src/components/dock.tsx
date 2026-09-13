@@ -1,13 +1,14 @@
-import { AnimatePresence, LazyMotion, domAnimation, m, useMotionValue, useSpring, useTransform, type MotionValue, type SpringOptions } from "motion/react";
+import { AnimatePresence, LazyMotion, domAnimation, m, useMotionValue, useReducedMotion, useSpring, useTransform, type MotionValue, type SpringOptions } from "motion/react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
+import { NavLink } from "react-router-dom";
 
 import "./dock.css";
 
 export interface DockItemData {
   readonly icon: ReactNode;
   readonly label: string;
-  readonly onClick: () => void;
-  readonly active?: boolean;
+  readonly to: string;
+  readonly end?: boolean;
   readonly className?: string;
 }
 
@@ -28,21 +29,23 @@ interface DockItemProps extends DockItemData {
   readonly distance: number;
   readonly magnification: number;
   readonly baseItemSize: number;
+  readonly reducedMotion: boolean;
 }
 
 function DockItem({
   label,
   icon,
-  onClick,
-  active = false,
+  to,
+  end = false,
   className = "",
   mouseX,
   spring,
   distance,
   magnification,
   baseItemSize,
+  reducedMotion,
 }: DockItemProps) {
-  const ref = useRef<HTMLButtonElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const mouseDistance = useTransform(mouseX, (value) => {
     const rect = ref.current?.getBoundingClientRect() ?? { x: 0, width: baseItemSize };
@@ -57,35 +60,57 @@ function DockItem({
   const lift = useTransform(size, [baseItemSize, magnification], [0, -4]);
 
   return (
-    <m.button
+    <m.div
       ref={ref}
-      type="button"
-      style={{ width: size, height: size, y: lift }}
-      onHoverStart={() => setIsHovered(true)}
-      onHoverEnd={() => setIsHovered(false)}
-      onFocus={() => setIsHovered(true)}
-      onBlur={() => setIsHovered(false)}
-      onClick={onClick}
-      className={`dock-item ${active ? "dock-item--active" : ""} ${className}`.trim()}
-      aria-current={active ? "page" : undefined}
-      aria-label={label}
+      style={reducedMotion
+        ? { width: baseItemSize, height: baseItemSize }
+        : { width: size, height: size, y: lift }}
+      onHoverStart={() => {
+        if (!reducedMotion) setIsHovered(true);
+      }}
+      onHoverEnd={() => {
+        if (!reducedMotion) setIsHovered(false);
+      }}
+      onFocus={() => {
+        if (!reducedMotion) setIsHovered(true);
+      }}
+      onBlur={() => {
+        if (!reducedMotion) setIsHovered(false);
+      }}
+      className="dock-item-motion"
     >
-      <span className="dock-icon" aria-hidden="true">{icon}</span>
-      <AnimatePresence>
-        {isHovered && (
-          <m.span
-            initial={{ opacity: 0, y: 2 }}
-            animate={{ opacity: 1, y: -7 }}
-            exit={{ opacity: 0, y: 2 }}
-            transition={{ duration: 0.14 }}
-            className="dock-label"
-            role="tooltip"
-          >
-            {label}
-          </m.span>
+      <NavLink
+        to={to}
+        end={end}
+        className={({ isActive }) =>
+          `dock-item ${isActive ? "dock-item--active" : ""} ${className}`.trim()
+        }
+        aria-label={label}
+      >
+        <span className="dock-icon" aria-hidden="true">{icon}</span>
+        {reducedMotion ? (
+          <span className="dock-label dock-label--static" role="tooltip" aria-hidden="true">
+            <span className="dock-label__content">{label}</span>
+          </span>
+        ) : (
+          <span className="dock-label" role="tooltip" aria-hidden="true">
+            <AnimatePresence>
+              {isHovered && (
+                <m.span
+                  initial={{ opacity: 0, y: 2 }}
+                  animate={{ opacity: 1, y: -7 }}
+                  exit={{ opacity: 0, y: 2 }}
+                  transition={{ duration: 0.14 }}
+                  className="dock-label__content"
+                >
+                  {label}
+                </m.span>
+              )}
+            </AnimatePresence>
+          </span>
         )}
-      </AnimatePresence>
-    </m.button>
+      </NavLink>
+    </m.div>
   );
 }
 
@@ -99,6 +124,7 @@ export default function Dock({
   dockHeight = 68,
   baseItemSize = 35,
 }: DockProps) {
+  const reducedMotion = useReducedMotion() ?? false;
   const mouseX = useMotionValue(Number.POSITIVE_INFINITY);
   const hovered = useMotionValue(0);
   const maxHeight = useMemo(
@@ -110,19 +136,24 @@ export default function Dock({
 
   return (
     <LazyMotion features={domAnimation} strict>
-      <m.div style={{ height }} className="dock-outer">
-        <m.div
-          onMouseMove={({ pageX }) => {
+      <m.div
+        style={reducedMotion ? { height: panelHeight } : { height }}
+        className="dock-outer"
+        data-reduced-motion={reducedMotion}
+      >
+        <nav
+          onMouseMove={({ clientX }) => {
+            if (reducedMotion) return;
             hovered.set(1);
-            mouseX.set(pageX);
+            mouseX.set(clientX);
           }}
           onMouseLeave={() => {
+            if (reducedMotion) return;
             hovered.set(0);
             mouseX.set(Number.POSITIVE_INFINITY);
           }}
           className={`dock-panel ${className}`.trim()}
           style={{ height: panelHeight }}
-          role="toolbar"
           aria-label="Primary navigation"
         >
           {items.map((item) => (
@@ -134,9 +165,10 @@ export default function Dock({
               distance={distance}
               magnification={magnification}
               baseItemSize={baseItemSize}
+              reducedMotion={reducedMotion}
             />
           ))}
-        </m.div>
+        </nav>
       </m.div>
     </LazyMotion>
   );
