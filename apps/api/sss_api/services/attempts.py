@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from threading import RLock
+from typing import Protocol
 
 from sss_core import Decision
 
@@ -21,10 +22,20 @@ class InstallAttempt:
     attempted_at: datetime
 
 
+class AttemptSink(Protocol):
+    def store(self, attempt: InstallAttempt) -> None: ...
+
+
+class NoopAttemptSink:
+    def store(self, attempt: InstallAttempt) -> None:
+        del attempt
+
+
 class AttemptStore:
-    def __init__(self) -> None:
+    def __init__(self, sink: AttemptSink | None = None) -> None:
         self._by_key: dict[str, InstallAttempt] = {}
         self._lock = RLock()
+        self._sink = sink or NoopAttemptSink()
 
     def record(self, idempotency_key: str, attempt: InstallAttempt) -> InstallAttempt:
         with self._lock:
@@ -33,6 +44,7 @@ class AttemptStore:
                 if replace(existing, attempted_at=attempt.attempted_at) != attempt:
                     raise ValueError("idempotency key was already used for another attempt")
                 return existing
+            self._sink.store(attempt)
             self._by_key[idempotency_key] = attempt
             return attempt
 
