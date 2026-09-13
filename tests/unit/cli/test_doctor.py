@@ -38,3 +38,24 @@ def test_http_service_reports_invalid_json_as_unhealthy() -> None:
         result = check_http_service("api", "https://api.example.test", client=client)
 
     assert not result.healthy
+
+
+def test_http_service_can_check_dependency_readiness() -> None:
+    observed_path = ""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal observed_path
+        observed_path = request.url.path
+        return httpx.Response(200, json={"status": "ready"}, request=request)
+
+    with _client(httpx.MockTransport(handler)) as client:
+        result = check_http_service(
+            "api",
+            "https://api.example.test",
+            client=client,
+            path="/health/ready",
+            expected_status="ready",
+        )
+
+    assert result.healthy
+    assert observed_path == "/health/ready"
