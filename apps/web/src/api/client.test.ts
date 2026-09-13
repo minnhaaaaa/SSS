@@ -8,6 +8,20 @@ const config = {
 };
 
 describe("ApiClient", () => {
+  it("uses the browser fetch function without an invalid receiver", async () => {
+    const nativeFetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ accepted: true }));
+    const client = new ApiClient(config);
+
+    try {
+      await expect(client.request("/v1/example")).resolves.toEqual({ accepted: true });
+      expect(nativeFetch).toHaveBeenCalledOnce();
+    } finally {
+      nativeFetch.mockRestore();
+    }
+  });
+
   it("sends JSON writes with credentials and an idempotency key", async () => {
     const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ accepted: true }), {
@@ -97,3 +111,10 @@ describe("ApiClient", () => {
     await expect(request).rejects.toThrow("cancelled by caller");
   });
 });
+
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}

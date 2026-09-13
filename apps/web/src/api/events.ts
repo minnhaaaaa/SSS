@@ -12,14 +12,20 @@ export type EventSourceFactory = (url: string | URL, init: EventSourceInit) => E
 
 export interface EventHandlers {
   readonly onEvent: (eventType: EventType, event: MessageEvent<string>) => void;
+  readonly onConnectionOpen?: () => void;
   readonly onConnectionError: (event: Event) => void;
 }
 
-export class ApiEventStream {
+export interface EventStreamService {
+  connect(handlers: EventHandlers): void;
+  close(): void;
+}
+
+export class ApiEventStream implements EventStreamService {
   private source: EventSource | null = null;
 
   public constructor(
-    private readonly config: RuntimeConfig,
+    private readonly config: Pick<RuntimeConfig, "apiBaseUrl" | "httpTimeoutMs">,
     private readonly factory: EventSourceFactory = (url, init) => new EventSource(url, init),
   ) {}
 
@@ -32,6 +38,7 @@ export class ApiEventStream {
         handlers.onEvent(eventType, event as MessageEvent<string>);
       });
     }
+    source.onopen = handlers.onConnectionOpen ?? null;
     source.onerror = handlers.onConnectionError;
     this.source = source;
   }

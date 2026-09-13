@@ -21,8 +21,8 @@ export class ApiError extends Error {
 
 export class ApiClient {
   public constructor(
-    private readonly config: RuntimeConfig,
-    private readonly fetchImplementation: FetchImplementation = fetch,
+    private readonly config: Pick<RuntimeConfig, "apiBaseUrl" | "httpTimeoutMs">,
+    private readonly fetchImplementation: FetchImplementation = (input, init) => fetch(input, init),
   ) {}
 
   public async request<ResponseBody>(
