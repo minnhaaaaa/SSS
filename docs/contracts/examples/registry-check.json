@@ -1,0 +1,14 @@
+{
+  "check_id": "check-demo-001",
+  "package": {
+    "ecosystem": "npm",
+    "registry_origin": "https://npm.demo.sss.test",
+    "canonical_name": "@sss-demo/reserved-synthetic"
+  },
+  "endpoint": "https://npm.demo.sss.test/@sss-demo%2Freserved-synthetic",
+  "status": "absent",
+  "http_status": 404,
+  "checked_at": "2026-09-01T12:01:00Z",
+  "response_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "error_class": null
+}

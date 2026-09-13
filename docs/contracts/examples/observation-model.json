@@ -1,0 +1,14 @@
+{
+  "observation_id": "obs-model-001",
+  "package": {
+    "ecosystem": "npm",
+    "registry_origin": "https://npm.demo.sss.test",
+    "canonical_name": "@sss-demo/reserved-synthetic"
+  },
+  "provenance": "model_probe",
+  "source_id": "run-001",
+  "model_configuration_id": "replay-model-a",
+  "observed_at": "2026-09-01T12:00:00Z",
+  "explicit_install_context": true,
+  "evidence_label": "Replayed synthetic evidence"
+}

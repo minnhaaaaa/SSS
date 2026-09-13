@@ -16,7 +16,7 @@ registry origin, and canonical package name.
   "agent_family": "codex",
   "package": {
     "ecosystem": "npm",
-    "registry_origin": "https://registry.npmjs.org",
+    "registry_origin": "https://npm.demo.sss.test",
     "canonical_name": "@sss-demo/reserved-synthetic"
   },
   "version_spec": "1.0.0",

@@ -1,0 +1,14 @@
+{
+  "package": {
+    "ecosystem": "npm",
+    "registry_origin": "https://npm.demo.sss.test",
+    "canonical_name": "@sss-demo/reserved-synthetic"
+  },
+  "version": "1.0.0",
+  "registry_origin": "https://npm.demo.sss.test",
+  "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "project_id": "project-demo",
+  "expires_at": "2026-09-12T12:48:00Z",
+  "nonce": "nonce-demo-001",
+  "policy_version": "sss-hackathon-v3"
+}

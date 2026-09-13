@@ -1,0 +1,18 @@
+{
+  "decision_id": "decision-demo-001",
+  "request_id": "req-demo-001",
+  "decision": "block",
+  "reason_codes": [
+    "REGISTERED_AFTER_HALLUCINATION",
+    "HIGH_GLOBAL_RECURRENCE"
+  ],
+  "scores": {
+    "absence_confidence": 100,
+    "target_attractiveness": 95,
+    "package_policy_risk": 75
+  },
+  "policy_version": "sss-hackathon-v3",
+  "expires_at": null,
+  "summary": "Registered 43 minutes ago after 46 verified absent recommendations.",
+  "child_process_allowed": false
+}

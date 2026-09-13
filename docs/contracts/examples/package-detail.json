@@ -1,0 +1,13 @@
+{
+  "package": {
+    "ecosystem": "npm",
+    "registry_origin": "https://npm.demo.sss.test",
+    "canonical_name": "@sss-demo/reserved-synthetic"
+  },
+  "candidate_status": "registered_after_absence",
+  "first_absence_at": "2026-09-01T12:01:00Z",
+  "first_registration_at": "2026-09-12T12:00:00Z",
+  "registration_age_minutes": 43,
+  "synthetic": true,
+  "evidence_label": "Replayed synthetic evidence"
+}
