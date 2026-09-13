@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from sss_api.demo_composition import ExasolDemoEvidenceProvider
@@ -14,6 +15,7 @@ from sss_core import (
     InstallRequest,
     PackageIdentity,
     PolicyContext,
+    PolicyDecision,
     PolicyEngine,
 )
 from sss_core.demo import load_demo_fixture
@@ -32,6 +34,22 @@ class FixedEvidenceProvider:
             interactive=False,
             historical_hallucination=True,
         )
+
+
+class RecordingDecisionRepository:
+    def __init__(self) -> None:
+        self.calls: list[tuple[InstallRequest, object, datetime, str]] = []
+
+    def record_decision(
+        self,
+        request: InstallRequest,
+        decision: PolicyDecision,
+        *,
+        evidence_as_of: datetime,
+        evidence_attestation: str,
+    ) -> PolicyDecision:
+        self.calls.append((request, decision, evidence_as_of, evidence_attestation))
+        return decision
 
 
 def _request() -> InstallRequest:
@@ -86,6 +104,30 @@ async def test_rechecking_same_request_does_not_duplicate_intervention() -> None
     assert second == first
     assert len(store.list_pending()) == 1
     assert len(broker.snapshot()) == 1
+
+
+async def test_guard_persists_one_attested_decision_before_returning() -> None:
+    broker = EventBroker(capacity=8)
+    decisions = RecordingDecisionRepository()
+    service = GuardService(
+        PolicyEngine(),
+        FixedEvidenceProvider(),
+        InterventionStore(),
+        broker,
+        decision_repository=decisions,
+    )
+
+    first = await service.check(_request())
+    second = await service.check(_request())
+
+    assert second == first
+    assert len(decisions.calls) == 1
+    request, decision, evidence_as_of, attestation = decisions.calls[0]
+    assert request == _request()
+    assert decision == first.decision
+    assert evidence_as_of.tzinfo is not None
+    assert len(attestation) == 64
+    assert all(character in "0123456789abcdef" for character in attestation)
 
 
 class FixedRadarRepository:

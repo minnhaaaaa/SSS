@@ -29,6 +29,7 @@ from sss_core.evidence.facts import EvidenceFacts
 from sss_core.registries.base import RegistryOutcome
 from sss_core.repositories.operations import (
     ApprovalNonceConflict,
+    ApprovalRecord,
     IdempotencyClaim,
     IdempotencyConflict,
     InstallAttempt,
@@ -797,7 +798,7 @@ class ExasolOperationalRepository:
         *,
         evidence_as_of: datetime,
         evidence_attestation: str,
-    ) -> None:
+    ) -> PolicyDecision:
         parameters = {
             "decision_id": decision.decision_id,
             "request_id": decision.request_id,
@@ -828,9 +829,44 @@ class ExasolOperationalRepository:
                 parameters,
             )
             self._connection.commit()
+            return decision
         except Exception:
             self._connection.rollback()
+            existing = self.get_decision(decision.decision_id)
+            if existing is not None and existing[0] == request:
+                return existing[1]
             raise
+
+    def get_decision(
+        self, decision_id: str
+    ) -> tuple[InstallRequest, PolicyDecision] | None:
+        rows = _rows(
+            self._connection.execute(
+                "SELECT REQUEST_JSON, REQUEST_ID, DECISION, REASON_CODES_JSON, "
+                "ABSENCE_CONFIDENCE, TARGET_ATTRACTIVENESS, PACKAGE_POLICY_RISK, "
+                "POLICY_VERSION FROM POLICY_DECISIONS WHERE DECISION_ID={decision_id}",
+                {"decision_id": decision_id},
+            )
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        return (
+            _request_from_json(str(row[0])),
+            PolicyDecision(
+                decision_id=decision_id,
+                request_id=str(row[1]),
+                decision=Decision(str(row[2])),
+                reason_codes=tuple(str(code) for code in json.loads(str(row[3]))),
+                scores=EvidenceScores(
+                    absence_confidence=None if row[4] is None else int(row[4]),
+                    target_attractiveness=int(row[5]),
+                    package_policy_risk=int(row[6]),
+                ),
+                policy_version=str(row[7]),
+                expires_at=None,
+            ),
+        )
 
     def record_attempt(
         self, attempt: InstallAttempt, *, attempt_id: str | None = None
@@ -1103,6 +1139,62 @@ class ExasolOperationalRepository:
             response_reference=response_reference,
             created_at=created_at,
         )
+
+    @staticmethod
+    def _approval(row: Sequence[Any]) -> ApprovalRecord:
+        scope_claims = json.loads(str(row[1]))
+        if not isinstance(scope_claims, dict):
+            raise ValueError("stored approval claims are invalid")
+        return ApprovalRecord(
+            approval_id=str(row[0]),
+            scope_claims=scope_claims,
+            signer=str(row[2]),
+            created_at=_utc_timestamp(row[3]),
+            expires_at=_utc_timestamp(row[4]),
+            nonce=str(row[5]),
+            request_id=str(row[6]),
+            intervention_id=str(row[7]),
+            consumed_at=None if row[8] is None else _utc_timestamp(row[8]),
+        )
+
+    def get_approval(self, approval_id: str) -> ApprovalRecord | None:
+        rows = _rows(
+            self._connection.execute(
+                "SELECT APPROVAL_ID, SCOPE_JSON, SIGNER, CREATED_AT, EXPIRES_AT, NONCE, "
+                "REQUEST_ID, INTERVENTION_ID, CONSUMED_AT FROM APPROVAL_GRANTS "
+                "WHERE APPROVAL_ID={approval_id}",
+                {"approval_id": approval_id},
+            )
+        )
+        return None if not rows else self._approval(rows[0])
+
+    def create_approval(self, record: ApprovalRecord) -> ApprovalRecord:
+        parameters = {
+            "approval_id": record.approval_id,
+            "scope_json": _json(dict(record.scope_claims)),
+            "signer": record.signer,
+            "created_at": _exasol_timestamp(record.created_at),
+            "expires_at": _exasol_timestamp(record.expires_at),
+            "nonce": record.nonce,
+            "request_id": record.request_id,
+            "intervention_id": record.intervention_id,
+        }
+        try:
+            self._connection.execute(
+                "INSERT INTO APPROVAL_GRANTS (APPROVAL_ID, SCOPE_JSON, SIGNER, CREATED_AT, "
+                "EXPIRES_AT, NONCE, REQUEST_ID, INTERVENTION_ID) VALUES ({approval_id}, "
+                "{scope_json}, {signer}, {created_at}, {expires_at}, {nonce}, {request_id}, "
+                "{intervention_id})",
+                parameters,
+            )
+            self._connection.commit()
+            return record
+        except Exception:
+            self._connection.rollback()
+            existing = self.get_approval(record.approval_id)
+            if existing is not None:
+                return existing
+            raise
 
     def consume_approval_nonce(
         self,

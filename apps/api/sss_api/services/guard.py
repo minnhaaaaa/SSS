@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from dataclasses import dataclass
-from typing import Protocol
+from datetime import UTC, datetime
+from typing import Any, Protocol
 
 from sss_core import (
     CandidateStatus,
@@ -33,6 +36,17 @@ class EvidenceProvider(Protocol):
     def context_for(self, package: PackageIdentity) -> PolicyContext: ...
 
 
+class DecisionRepository(Protocol):
+    def record_decision(
+        self,
+        request: InstallRequest,
+        decision: PolicyDecision,
+        *,
+        evidence_as_of: datetime,
+        evidence_attestation: str,
+    ) -> PolicyDecision: ...
+
+
 class PolicyFactsRepository(Protocol):
     def load_facts(self, package: PackageIdentity) -> EvidenceFacts: ...
 
@@ -45,6 +59,16 @@ class ExasolEvidenceProvider(EvidenceProvider):
 
     def context_for(self, package: PackageIdentity) -> PolicyContext:
         facts = self._repository.load_facts(package)
+        return self._context_from_facts(facts)
+
+    def context_with_as_of(
+        self, package: PackageIdentity
+    ) -> tuple[PolicyContext, datetime]:
+        facts = self._repository.load_facts(package)
+        return self._context_from_facts(facts), facts.data_as_of
+
+    @staticmethod
+    def _context_from_facts(facts: EvidenceFacts) -> PolicyContext:
         attractiveness = score_target_attractiveness(
             AttractivenessInputs(
                 facts.distinct_verified_runs,
@@ -101,11 +125,14 @@ class GuardService:
         evidence: EvidenceProvider,
         interventions: InterventionStore,
         event_broker: EventBroker,
+        *,
+        decision_repository: DecisionRepository | None = None,
     ) -> None:
         self._engine = engine
         self._evidence = evidence
         self._interventions = interventions
         self._event_broker = event_broker
+        self._decision_repository = decision_repository
         self._by_request_id: dict[str, GuardAssessment] = {}
         self._by_idempotency_key: dict[str, tuple[InstallRequest, GuardAssessment]] = {}
         self._lock = asyncio.Lock()
@@ -128,8 +155,22 @@ class GuardService:
                     self._by_idempotency_key[idempotency_key] = (request, existing)
                 return existing
 
-            context = self._evidence.context_for(request.package)
+            timed_context = getattr(self._evidence, "context_with_as_of", None)
+            if callable(timed_context):
+                context, evidence_as_of = timed_context(request.package)
+            else:
+                context = self._evidence.context_for(request.package)
+                evidence_as_of = datetime.now(UTC)
             decision = self._engine.assess(request, context)
+            if self._decision_repository is not None:
+                decision = self._decision_repository.record_decision(
+                    request,
+                    decision,
+                    evidence_as_of=evidence_as_of,
+                    evidence_attestation=_attest_evidence(
+                        request, context, evidence_as_of
+                    ),
+                )
             labels = self._evidence_labels(context)
             intervention_id: str | None = None
             if decision.decision is not Decision.ALLOW:
@@ -175,3 +216,28 @@ class GuardService:
         if context.historical_hallucination:
             labels.append("Registered after verified model hallucination")
         return tuple(labels)
+
+
+def _attest_evidence(
+    request: InstallRequest, context: PolicyContext, data_as_of: datetime
+) -> str:
+    payload: dict[str, Any] = {
+        "request_id": request.request_id,
+        "package": {
+            "ecosystem": request.package.ecosystem.value,
+            "registry_origin": request.package.registry_origin,
+            "canonical_name": request.package.canonical_name,
+        },
+        "candidate_status": context.candidate_status.value,
+        "registry_outcome": context.registry_outcome.value,
+        "scores": {
+            "absence_confidence": context.scores.absence_confidence,
+            "target_attractiveness": context.scores.target_attractiveness,
+            "package_policy_risk": context.scores.package_policy_risk,
+        },
+        "approved_source": context.approved_source,
+        "historical_hallucination": context.historical_hallucination,
+        "data_as_of": data_as_of.astimezone(UTC).isoformat(),
+    }
+    canonical = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    return hashlib.sha256(canonical).hexdigest()

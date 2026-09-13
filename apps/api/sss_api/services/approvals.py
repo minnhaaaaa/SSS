@@ -9,9 +9,11 @@ import json
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from threading import RLock
+from typing import Any, Protocol
 
 from sss_core import InstallRequest
 from sss_core.policy.approvals import ApprovalScope
+from sss_core.repositories.operations import ApprovalNonceConflict, ApprovalRecord
 
 
 class ApprovalError(ValueError):
@@ -28,14 +30,33 @@ class ApprovalGrant:
     consumed: bool = False
 
 
+class ApprovalRepository(Protocol):
+    def create_approval(self, record: ApprovalRecord) -> ApprovalRecord: ...
+
+    def get_approval(self, approval_id: str) -> ApprovalRecord | None: ...
+
+    def consume_approval_nonce(
+        self,
+        approval_id: str,
+        nonce: str,
+        request_id: str,
+        *,
+        consumed_at: datetime,
+        metadata: dict[str, Any],
+    ) -> None: ...
+
+
 class ApprovalService:
-    def __init__(self, *, signing_key: bytes) -> None:
+    def __init__(
+        self, *, signing_key: bytes, repository: ApprovalRepository | None = None
+    ) -> None:
         if len(signing_key) < 32:
             raise ValueError("approval signing key must contain at least 32 bytes")
         self._signing_key = signing_key
         self._by_token: dict[str, ApprovalGrant] = {}
         self._by_intervention: dict[str, ApprovalGrant] = {}
         self._lock = RLock()
+        self._repository = repository
 
     def issue(
         self,
@@ -59,6 +80,25 @@ class ApprovalService:
             request_id=request.request_id,
             intervention_id=intervention_id,
         )
+        if self._repository is not None:
+            durable = self._repository.create_approval(
+                ApprovalRecord(
+                    approval_id=approval_id,
+                    scope_claims=scope.to_claims(),
+                    signer="hmac-sha256",
+                    created_at=issued_at,
+                    expires_at=scope.expires_at,
+                    nonce=scope.nonce,
+                    request_id=request.request_id,
+                    intervention_id=intervention_id,
+                )
+            )
+            if (
+                durable.scope_claims != scope.to_claims()
+                or durable.request_id != request.request_id
+            ):
+                raise ApprovalError("approval id already exists with different claims")
+            return self._grant_from_record(durable, token)
         with self._lock:
             existing = self._by_intervention.get(intervention_id)
             if existing is not None:
@@ -98,6 +138,33 @@ class ApprovalService:
         if current_time >= scope.expires_at:
             raise ApprovalError("approval has expired")
         with self._lock:
+            if self._repository is not None:
+                approval_id = hashlib.sha256(token.encode()).hexdigest()
+                record = self._repository.get_approval(approval_id)
+                if record is None or record.scope_claims != scope.to_claims():
+                    raise ApprovalError("approval was not issued by this service")
+                if record.request_id != request_id:
+                    raise ApprovalError("approval request does not match")
+                try:
+                    self._repository.consume_approval_nonce(
+                        approval_id,
+                        expected_nonce,
+                        request_id,
+                        consumed_at=current_time,
+                        metadata={"approval_id": approval_id},
+                    )
+                except ApprovalNonceConflict as exc:
+                    refreshed = self._repository.get_approval(approval_id)
+                    message = (
+                        "approval has already been consumed"
+                        if refreshed is not None and refreshed.consumed_at is not None
+                        else "approval nonce is invalid or already consumed"
+                    )
+                    raise ApprovalError(message) from exc
+                consumed_record = self._repository.get_approval(approval_id)
+                if consumed_record is None:
+                    raise ApprovalError("consumed approval record is unavailable")
+                return self._grant_from_record(consumed_record, token)
             grant = self._by_token.get(token)
             if grant is None or grant.scope != scope:
                 raise ApprovalError("approval was not issued by this service")
@@ -109,6 +176,17 @@ class ApprovalService:
             self._by_token[token] = consumed
             self._by_intervention[grant.intervention_id] = consumed
             return consumed
+
+    @staticmethod
+    def _grant_from_record(record: ApprovalRecord, token: str) -> ApprovalGrant:
+        return ApprovalGrant(
+            approval_id=record.approval_id,
+            token=token,
+            scope=ApprovalScope.from_claims(dict(record.scope_claims)),
+            request_id=record.request_id,
+            intervention_id=record.intervention_id,
+            consumed=record.consumed_at is not None,
+        )
 
 
 def _canonical_json(claims: dict[str, object]) -> bytes:

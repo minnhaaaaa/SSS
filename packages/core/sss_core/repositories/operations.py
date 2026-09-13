@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Protocol
@@ -18,6 +18,22 @@ class IdempotencyConflict(ValueError):
 
 class ApprovalNonceConflict(ValueError):
     """An approval nonce does not exist, does not match, or was already consumed."""
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovalRecord:
+    approval_id: str
+    scope_claims: Mapping[str, Any]
+    signer: str
+    created_at: datetime
+    expires_at: datetime
+    nonce: str
+    request_id: str
+    intervention_id: str
+    consumed_at: datetime | None = None
+
+    def with_consumed_at(self, value: datetime) -> ApprovalRecord:
+        return replace(self, consumed_at=value)
 
 
 class InterventionStatus(StrEnum):
@@ -79,7 +95,7 @@ class OperationalRepository(Protocol):
         *,
         evidence_as_of: datetime,
         evidence_attestation: str,
-    ) -> None: ...
+    ) -> PolicyDecision: ...
 
     def record_attempt(
         self, attempt: InstallAttempt, *, attempt_id: str | None = None
@@ -111,6 +127,10 @@ class OperationalRepository(Protocol):
     ) -> IdempotencyClaim: ...
 
     def get_idempotency(self, idempotency_key: str) -> IdempotencyClaim | None: ...
+
+    def create_approval(self, record: ApprovalRecord) -> ApprovalRecord: ...
+
+    def get_approval(self, approval_id: str) -> ApprovalRecord | None: ...
 
     def consume_approval_nonce(
         self,

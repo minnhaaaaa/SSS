@@ -11,10 +11,12 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
+from sss_api.services.approvals import ApprovalError, ApprovalService
 from sss_api.services.attempts import InstallAttempt
 from sss_api.services.interventions import Intervention, InterventionStatus
 from sss_core import Decision, Ecosystem, EvidenceScores, InstallRequest, PackageIdentity
 from sss_core.domain import PolicyDecision
+from sss_core.policy.approvals import ApprovalScope
 
 from tests.integration.test_exasol_schema import RecordingMigrationConnection
 
@@ -44,6 +46,7 @@ class RecordingOperationalConnection:
         self.commits = 0
         self.rollbacks = 0
         self.attempts: dict[str, dict[str, Any]] = {}
+        self.decisions: dict[str, dict[str, Any]] = {}
         self.interventions: dict[str, dict[str, Any]] = {}
         self.claims: dict[str, dict[str, Any]] = {}
         self.events: dict[int, dict[str, Any]] = {}
@@ -55,6 +58,30 @@ class RecordingOperationalConnection:
         params = query_params or {}
         self.calls.append((sql, query_params))
         normalized = " ".join(sql.upper().split())
+        if normalized.startswith("INSERT INTO POLICY_DECISIONS"):
+            decision_id = str(params["decision_id"])
+            if decision_id in self.decisions:
+                raise RuntimeError("unique constraint violation")
+            self.decisions[decision_id] = dict(params)
+            return StatementResult([], rowcount=1)
+        if normalized.startswith("SELECT REQUEST_JSON"):
+            row = self.decisions.get(str(params["decision_id"]))
+            if row is None:
+                return StatementResult([])
+            return StatementResult(
+                [
+                    (
+                        row["request_json"],
+                        row["request_id"],
+                        row["decision"],
+                        row["reason_codes_json"],
+                        row["absence_confidence"],
+                        row["target_attractiveness"],
+                        row["package_policy_risk"],
+                        row["policy_version"],
+                    )
+                ]
+            )
         if normalized.startswith("INSERT INTO INSTALL_ATTEMPTS"):
             if str(params["attempt_id"]) in self.attempts:
                 raise RuntimeError("unique constraint violation")
@@ -163,6 +190,34 @@ class RecordingOperationalConnection:
                     for row in rows
                 ]
             )
+        if normalized.startswith("INSERT INTO APPROVAL_GRANTS"):
+            approval_id = str(params["approval_id"])
+            if approval_id in self.approvals:
+                raise RuntimeError("unique constraint violation")
+            self.approvals[approval_id] = {
+                **params,
+                "consumed_at": None,
+            }
+            return StatementResult([], rowcount=1)
+        if normalized.startswith("SELECT APPROVAL_ID"):
+            row = self.approvals.get(str(params["approval_id"]))
+            if row is None:
+                return StatementResult([])
+            return StatementResult(
+                [
+                    (
+                        row["approval_id"],
+                        row["scope_json"],
+                        row["signer"],
+                        row["created_at"],
+                        row["expires_at"],
+                        row["nonce"],
+                        row["request_id"],
+                        row["intervention_id"],
+                        row["consumed_at"],
+                    )
+                ]
+            )
         if normalized.startswith("UPDATE APPROVAL_GRANTS"):
             row = self.approvals.get(str(params["approval_id"]))
             if (
@@ -266,6 +321,29 @@ def test_attempt_and_intervention_survive_repository_recreation() -> None:
     assert all(params is not None for sql, params in connection.calls if "{" in sql)
 
 
+def test_decision_record_is_idempotent_across_repository_recreation() -> None:
+    from sss_core.repositories.exasol import ExasolOperationalRepository
+
+    connection = RecordingOperationalConnection()
+    request = request_fixture()
+    decision = decision_fixture()
+
+    ExasolOperationalRepository(connection).record_decision(
+        request,
+        decision,
+        evidence_as_of=NOW,
+        evidence_attestation="e" * 64,
+    )
+    ExasolOperationalRepository(connection).record_decision(
+        request,
+        decision,
+        evidence_as_of=NOW,
+        evidence_attestation="e" * 64,
+    )
+
+    assert len(connection.decisions) == 1
+
+
 def test_idempotency_conflict_preserves_original_response() -> None:
     from sss_core.repositories.exasol import ExasolOperationalRepository
     from sss_core.repositories.operations import IdempotencyConflict
@@ -344,6 +422,59 @@ def test_approval_nonce_consumption_is_compare_and_set() -> None:
     assert connection.commits == 1
     assert connection.rollbacks == 1
 
+
+def test_signed_approval_survives_repository_and_service_recreation() -> None:
+    from sss_core.repositories.exasol import ExasolOperationalRepository
+
+    connection = RecordingOperationalConnection()
+    request = replace(
+        request_fixture(),
+        package=PackageIdentity(
+            Ecosystem.NPM, "https://registry.npmjs.org", "safe-lib"
+        ),
+    )
+    scope = ApprovalScope(
+        package=request.package,
+        version="1.0.0",
+        registry_origin=request.package.registry_origin,
+        artifact_sha256="a" * 64,
+        project_id=request.project_id,
+        expires_at=NOW + timedelta(minutes=5),
+        nonce="durable-nonce",
+        policy_version="sss-hackathon-v3",
+    )
+    key = b"production-signing-key-with-32-bytes-minimum"
+    issued = ApprovalService(
+        signing_key=key,
+        repository=ExasolOperationalRepository(connection),
+    ).issue(
+        intervention_id="intervention-1",
+        request=request,
+        scope=scope,
+        now=NOW,
+    )
+
+    consumed = ApprovalService(
+        signing_key=key,
+        repository=ExasolOperationalRepository(connection),
+    ).consume(
+        token=issued.token,
+        request_id=request.request_id,
+        expected_nonce=scope.nonce,
+        now=NOW + timedelta(seconds=1),
+    )
+
+    assert consumed.consumed is True
+    with pytest.raises(ApprovalError, match="already been consumed"):
+        ApprovalService(
+            signing_key=key,
+            repository=ExasolOperationalRepository(connection),
+        ).consume(
+            token=issued.token,
+            request_id=request.request_id,
+            expected_nonce=scope.nonce,
+            now=NOW + timedelta(seconds=2),
+        )
 
 def test_approval_nonce_rejects_wrong_request_and_expired_first_use() -> None:
     from sss_core.repositories.exasol import ExasolOperationalRepository
@@ -589,7 +720,7 @@ def test_idempotency_hash_is_canonical_and_does_not_expose_payload() -> None:
 def test_live_operational_state_survives_connection_recreation() -> None:
     import pyexasol
     from sss_core.repositories.exasol import ExasolOperationalRepository
-    from sss_core.repositories.operations import ApprovalNonceConflict
+    from sss_core.repositories.operations import ApprovalNonceConflict, ApprovalRecord
 
     suffix = uuid4().hex
     decision_id = f"task3-decision-{suffix}"
@@ -638,23 +769,18 @@ def test_live_operational_state_survives_connection_recreation() -> None:
         first.record_attempt(attempt)
         first.create_intervention(intervention)
         first.claim_idempotency(idempotency_key, "d" * 64, decision_id)
-        first_connection.execute(
-            "INSERT INTO APPROVAL_GRANTS (APPROVAL_ID, SCOPE_JSON, SIGNER, CREATED_AT, "
-            "EXPIRES_AT, CONSUMED_AT, NONCE, REQUEST_ID, INTERVENTION_ID) VALUES "
-            "({approval_id}, {scope_json}, {signer}, {created_at}, {expires_at}, NULL, "
-            "{nonce}, {request_id}, {intervention_id})",
-            {
-                "approval_id": approval_id,
-                "scope_json": "{}",
-                "signer": "task3-live-test",
-                "created_at": NOW.replace(tzinfo=None),
-                "expires_at": (NOW + timedelta(hours=1)).replace(tzinfo=None),
-                "nonce": f"task3-nonce-{suffix}",
-                "request_id": request_id,
-                "intervention_id": intervention_id,
-            },
+        first.create_approval(
+            ApprovalRecord(
+                approval_id=approval_id,
+                scope_claims={"test": "live-restart"},
+                signer="task3-live-test",
+                created_at=NOW,
+                expires_at=NOW + timedelta(hours=1),
+                nonce=f"task3-nonce-{suffix}",
+                request_id=request_id,
+                intervention_id=intervention_id,
+            )
         )
-        first_connection.commit()
         with pytest.raises(ApprovalNonceConflict):
             first.consume_approval_nonce(
                 approval_id,
@@ -701,6 +827,10 @@ def test_live_operational_state_survives_connection_recreation() -> None:
             assert claim is not None
             assert claim.response_reference == decision_id
             assert second.events_after(after_id=event_id - 1, limit=1)[0].event_id == event_id
+            approval = second.get_approval(approval_id)
+            assert approval is not None
+            assert approval.scope_claims == {"test": "live-restart"}
+            assert approval.consumed_at == NOW
             consumed = second_connection.execute(
                 "SELECT CONSUMED_REQUEST_ID FROM APPROVAL_GRANTS "
                 "WHERE APPROVAL_ID={approval_id}",

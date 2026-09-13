@@ -80,10 +80,18 @@ def build_production_services(settings: ApiSettings) -> ServiceContainer:
     if settings.approval_signing_key is None:
         connection.close()
         raise ConfigurationError("production requires an approval signing key")
-    approval_service = ApprovalService(signing_key=settings.approval_signing_key.encode())
+    approval_service = ApprovalService(
+        signing_key=settings.approval_signing_key.encode(), repository=operational
+    )
     return ServiceContainer(
         event_broker=broker,
-        guard_service=GuardService(PolicyEngine(), evidence, interventions, broker),
+        guard_service=GuardService(
+            PolicyEngine(),
+            evidence,
+            interventions,
+            broker,
+            decision_repository=operational,
+        ),
         intervention_store=interventions,
         install_attempt_store=AttemptStore(repository=operational),
         approval_service=approval_service,
