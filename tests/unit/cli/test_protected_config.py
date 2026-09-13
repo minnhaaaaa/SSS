@@ -44,6 +44,7 @@ def test_protected_compose_environment_contains_only_runtime_session_values(
             "SSS_APPROVAL_SIGNING_KEY": "must-not-leak",
             "SSS_API_BEARER_TOKENS": "must-not-leak",
             "SSS_EXASOL_PASSWORD": "must-not-leak",
+            "SSS_ARTIFACT_SHA256": "b" * 64,
         },
     )
 
@@ -56,6 +57,9 @@ def test_protected_compose_environment_contains_only_runtime_session_values(
         "SSS_PROTECTED_NETWORK": "sss-protected",
         "SSS_PROJECT_PATH": str(tmp_path.resolve()),
         "SSS_GUARD_SESSION_TOKEN": "short-lived-token",
+        "SSS_ARTIFACT_SHA256": "b" * 64,
+        "SSS_PROJECT_ID": "project-demo",
+        "SSS_AGENT_FAMILY": "codex",
     }
 
 

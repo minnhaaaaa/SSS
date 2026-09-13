@@ -82,6 +82,7 @@ class CliSettings:
     project_path: Path | None
     guard_session_token: str | None
     npm_registry_url: str = "https://registry.npmjs.org"
+    pypi_registry_url: str = "https://pypi.org/simple"
     project_id: str = "project-demo"
     agent_family: str = "codex"
     demo_artifact_sha256: str = "b" * 64
@@ -138,6 +139,11 @@ class CliSettings:
                 source,
                 "SSS_NPM_REGISTRY_URL",
                 "https://registry.npmjs.org",
+            ),
+            pypi_registry_url=_http_url(
+                source,
+                "SSS_PYPI_REGISTRY_URL",
+                "https://pypi.org/simple",
             ),
             project_id=project_id,
             agent_family=agent_family,

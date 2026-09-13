@@ -52,6 +52,7 @@ def _protected_compose_config() -> dict[str, Any]:
         "SSS_API_URL": "http://api:8000",
         "SSS_GATEWAY_URL": "http://gateway:8080",
         "SSS_GUARD_SESSION_TOKEN": "local-session-token",
+        "SSS_ARTIFACT_SHA256": "b" * 64,
         "SSS_PROJECT_PATH": str(ROOT),
         "SSS_PROTECTED_NETWORK": "local-protected-network",
     }
@@ -113,8 +114,15 @@ def test_cli_protected_compose_has_no_administrative_credentials() -> None:
     assert service["cap_drop"] == ["ALL"]
     assert set(service["environment"]) == {
         "SSS_API_URL",
+        "SSS_API_TOKEN",
         "SSS_GATEWAY_URL",
-        "SSS_GUARD_SESSION_TOKEN",
+        "SSS_PROJECT_ID",
+        "SSS_AGENT_FAMILY",
+        "SSS_DEMO_ARTIFACT_SHA256",
+        "PIP_INDEX_URL",
+        "PIP_EXTRA_INDEX_URL",
+        "NPM_CONFIG_REGISTRY",
+        "NPM_CONFIG_REPLACE_REGISTRY_HOST",
     }
     assert "SSS_APPROVAL_SIGNING_KEY" not in service["environment"]
     assert "SSS_API_BEARER_TOKENS" not in service["environment"]

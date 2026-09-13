@@ -30,7 +30,14 @@ def build_protected_compose_environment(
         "SSS_PROTECTED_NETWORK": settings.protected_network,
         "SSS_PROJECT_PATH": str(settings.project_path.resolve()) if settings.project_path else None,
         "SSS_GUARD_SESSION_TOKEN": settings.guard_session_token,
+        "SSS_ARTIFACT_SHA256": source.get("SSS_ARTIFACT_SHA256"),
+        "SSS_PROJECT_ID": settings.project_id,
+        "SSS_AGENT_FAMILY": settings.agent_family,
     }
+    agent_image = settings.agent_image
+    if agent_image is None:
+        raise CliConfigurationError("SSS_AGENT_IMAGE is required")
+    validate_digest_pinned_image(agent_image)
     missing = sorted(key for key, value in required.items() if not value)
     if missing:
         raise CliConfigurationError(
@@ -38,10 +45,9 @@ def build_protected_compose_environment(
         )
     if settings.project_path is None or not settings.project_path.is_dir():
         raise CliConfigurationError("SSS_PROJECT_PATH must be an existing directory")
-    agent_image = settings.agent_image
-    if agent_image is None:
-        raise CliConfigurationError("SSS_AGENT_IMAGE is required")
-    validate_digest_pinned_image(agent_image)
+    artifact = required["SSS_ARTIFACT_SHA256"]
+    if artifact is None or not re.fullmatch(r"[a-f0-9]{64}", artifact):
+        raise CliConfigurationError("SSS_ARTIFACT_SHA256 must be a lowercase SHA-256")
 
     return build_minimal_environment(
         source,

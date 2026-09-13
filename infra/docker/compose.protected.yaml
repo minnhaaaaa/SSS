@@ -5,8 +5,15 @@ services:
     image: ${SSS_AGENT_IMAGE:?Set SSS_AGENT_IMAGE to a digest-pinned agent image}
     environment:
       SSS_API_URL: ${SSS_API_URL:?Set SSS_API_URL}
+      SSS_API_TOKEN: ${SSS_GUARD_SESSION_TOKEN:?Set a short-lived Guard token}
       SSS_GATEWAY_URL: ${SSS_GATEWAY_URL:?Set SSS_GATEWAY_URL}
-      SSS_GUARD_SESSION_TOKEN: ${SSS_GUARD_SESSION_TOKEN:?Set a short-lived Guard token}
+      SSS_PROJECT_ID: ${SSS_PROJECT_ID:-protected-project}
+      SSS_AGENT_FAMILY: ${SSS_AGENT_FAMILY:-local-agent}
+      SSS_DEMO_ARTIFACT_SHA256: ${SSS_ARTIFACT_SHA256:?Set the expected package artifact SHA-256}
+      PIP_INDEX_URL: ${SSS_GATEWAY_URL:?Set SSS_GATEWAY_URL}/pypi/simple
+      PIP_EXTRA_INDEX_URL: ""
+      NPM_CONFIG_REGISTRY: ${SSS_GATEWAY_URL:?Set SSS_GATEWAY_URL}/npm
+      NPM_CONFIG_REPLACE_REGISTRY_HOST: never
     volumes:
       - type: bind
         source: ${SSS_PROJECT_PATH:?Set SSS_PROJECT_PATH}

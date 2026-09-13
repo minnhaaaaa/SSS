@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from os import environ
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -12,6 +13,7 @@ from rich.table import Table
 
 from sss_cli.admin import generate_token
 from sss_cli.config import CliSettings, OperatorSettings
+from sss_cli.config_file import StoredCliConfig, default_config_path, write_config
 from sss_cli.doctor import check_http_service
 from sss_cli.intervene import HttpInterventionClient, run_intervention
 from sss_cli.protect import ProtectedLauncher
@@ -23,6 +25,26 @@ token_app = typer.Typer(no_args_is_help=True)
 app.add_typer(admin_app, name="admin")
 admin_app.add_typer(token_app, name="token")
 console = Console()
+
+
+@app.command()
+def configure(
+    server: Annotated[str, typer.Option("--server", help="Guard API base URL.")],
+    token_file: Annotated[
+        str, typer.Option("--token-file", help="Path to a mode-0600 token file.")
+    ],
+    organization_id: Annotated[
+        str, typer.Option("--organization", help="Organization identifier.")
+    ] = "default",
+    project_id: Annotated[
+        str, typer.Option("--project", help="Protected project identifier.")
+    ] = "default",
+) -> None:
+    """Write safe local configuration without copying the raw token."""
+    config = StoredCliConfig(server, Path(token_file), organization_id, project_id)
+    destination = default_config_path(environ)
+    write_config(config, destination)
+    console.print(f"Wrote SSS configuration to {destination}")
 
 
 @token_app.command("generate")
