@@ -3,6 +3,7 @@ from __future__ import annotations
 
 def test_frozen_domain_types_are_importable_from_package_root() -> None:
     from sss_core import (
+        POLICY_VERSION,
         CandidateStatus,
         Decision,
         Ecosystem,
@@ -10,7 +11,9 @@ def test_frozen_domain_types_are_importable_from_package_root() -> None:
         EvidenceScores,
         InstallRequest,
         PackageIdentity,
+        PolicyContext,
         PolicyDecision,
+        PolicyEngine,
         ReasonCode,
         RegistryStatus,
     )
@@ -30,5 +33,8 @@ def test_frozen_domain_types_are_importable_from_package_root() -> None:
             EvidenceScores,
             InstallRequest,
             PolicyDecision,
+            PolicyContext,
+            PolicyEngine,
         )
     )
+    assert POLICY_VERSION == "sss-hackathon-v3"

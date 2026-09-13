@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from sss_core.domain import Ecosystem, InstallRequest, PackageIdentity
 from sss_core.policy.approvals import ApprovalScope
+
+ROOT = Path(__file__).parents[2]
 
 
 def _request() -> InstallRequest:
@@ -73,3 +77,26 @@ def test_missing_or_invalid_artifact_hash_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="artifact_sha256"):
         replace(_scope(now), artifact_sha256="")
+
+
+def test_approved_json_claims_round_trip_through_scope() -> None:
+    claims = json.loads(
+        (ROOT / "docs/contracts/examples/approval-create-request.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    scope = ApprovalScope.from_claims(claims)
+
+    assert scope.to_claims() == claims
+
+
+def test_claims_reject_unknown_fields_and_naive_expiry() -> None:
+    now = datetime(2026, 9, 7, tzinfo=UTC)
+    claims = _scope(now).to_claims()
+    claims["unexpected"] = True
+    with pytest.raises(ValueError, match="exactly"):
+        ApprovalScope.from_claims(claims)
+
+    with pytest.raises(ValueError, match="timezone"):
+        replace(_scope(now), expires_at=datetime(2026, 9, 7))
