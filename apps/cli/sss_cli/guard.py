@@ -2,26 +2,18 @@
 
 from __future__ import annotations
 
-import hashlib
-import re
-import shlex
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Protocol
 
-from sss_core import Decision, Ecosystem, InstallRequest
-from sss_core.extraction import PackageSource, UnsafeInputError
-from sss_core.extraction.npm import extract_npm_mentions
-from sss_core.identity import canonicalize_identity
+from sss_core import Decision, InstallRequest
 
 from sss_cli.adapters import GuardAdapterError, GuardDecisionResult
-from sss_cli.process import ProcessResult
+from sss_cli.install_intent import parse_install_argv
+from sss_cli.process import ProcessConfigurationError, ProcessResult
 
 BLOCK_EXIT_CODE = 23
-_EXACT_NPM_VERSION = re.compile(
-    r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$"
-)
-_SHELL_TOKENS = frozenset({";", "&&", "||", "|", ">", ">>", "<", "<<"})
+ASSESSMENT_UNAVAILABLE_EXIT_CODE = 24
 
 
 class GuardClient(Protocol):
@@ -41,79 +33,6 @@ class ManagerRunner(Protocol):
     ) -> ProcessResult: ...
 
 
-def parse_install_argv(
-    manager: str,
-    arguments: Sequence[str],
-    *,
-    registry_origin: str,
-    project_id: str,
-    agent_family: str,
-    artifact_sha256: str,
-) -> tuple[InstallRequest, ...]:
-    normalized_manager = manager.casefold()
-    argv = tuple(arguments)
-    if normalized_manager != "pnpm" or not argv or argv[0] != "add":
-        raise ValueError("strict demo mode supports only pnpm add")
-    if len(artifact_sha256) != 64 or any(c not in "0123456789abcdef" for c in artifact_sha256):
-        raise ValueError("strict demo mode requires a lowercase SHA-256")
-    if any(_unsafe_argument(argument) for argument in argv):
-        raise ValueError("package-manager arguments contain unsafe shell syntax")
-    try:
-        mentions = extract_npm_mentions(shlex.join((normalized_manager, *argv)))
-    except UnsafeInputError as exc:
-        raise ValueError("package-manager arguments contain unsafe shell syntax") from exc
-    if not mentions:
-        raise ValueError("pnpm add must include at least one package")
-    requests: list[InstallRequest] = []
-    for mention in mentions:
-        if mention.source is not PackageSource.REGISTRY or mention.requested_registry is not None:
-            raise ValueError("strict demo mode allows only the configured npm registry")
-        if mention.version_spec is None or not _EXACT_NPM_VERSION.fullmatch(mention.version_spec):
-            raise ValueError("strict demo mode requires an exact npm version")
-        package = canonicalize_identity(
-            Ecosystem.NPM,
-            registry_origin,
-            mention.canonical_name,
-        )
-        request_key = "\0".join(
-            (
-                project_id,
-                agent_family,
-                normalized_manager,
-                *argv,
-                package.registry_origin,
-                package.canonical_name,
-                mention.version_spec,
-                artifact_sha256,
-            )
-        )
-        requests.append(
-            InstallRequest(
-                request_id=hashlib.sha256(request_key.encode()).hexdigest(),
-                project_id=project_id,
-                agent_family=agent_family,
-                package=package,
-                version_spec=mention.version_spec,
-                direct_url=None,
-                artifact_sha256=artifact_sha256,
-                is_direct=True,
-            )
-        )
-    return tuple(requests)
-
-
-def _unsafe_argument(argument: str) -> bool:
-    return (
-        not argument
-        or argument in _SHELL_TOKENS
-        or "\x00" in argument
-        or "\r" in argument
-        or "\n" in argument
-        or "$(" in argument
-        or "`" in argument
-    )
-
-
 class GuardRunner:
     def __init__(
         self,
@@ -123,10 +42,11 @@ class GuardRunner:
         registry_origin: str,
         project_id: str,
         agent_family: str,
-        artifact_sha256: str,
+        artifact_sha256: str | None,
         cwd: Path,
         environment: Mapping[str, str],
         write: Callable[[str], None],
+        pypi_registry_origin: str = "https://pypi.org",
     ) -> None:
         self._client = client
         self._process_runner = process_runner
@@ -137,46 +57,88 @@ class GuardRunner:
         self._cwd = cwd
         self._environment = environment
         self._write = write
+        self._pypi_registry_origin = pypi_registry_origin
 
     def run(self, manager: str, arguments: Sequence[str]) -> int:
         argv = tuple(arguments)
         try:
-            requests = parse_install_argv(
-                manager,
-                argv,
-                registry_origin=self._registry_origin,
-                project_id=self._project_id,
-                agent_family=self._agent_family,
-                artifact_sha256=self._artifact_sha256,
-            )
-            assessments = tuple(self._client.check(request) for request in requests)
-        except (GuardAdapterError, ValueError) as exc:
+            requests, assessments = self._assess(manager, argv)
+        except ValueError as exc:
             self._write(f"SSS BLOCK — {exc}")
             self._write("Installation was not started.")
             return BLOCK_EXIT_CODE
+        except GuardAdapterError as exc:
+            self._write(f"SSS UNAVAILABLE — {exc}")
+            self._write("Installation was not started.")
+            return ASSESSMENT_UNAVAILABLE_EXIT_CODE
 
         blocked = next(
             (
-                assessment
-                for assessment in assessments
-                if assessment.decision is not Decision.ALLOW
-                or not assessment.child_process_allowed
+                (request, assessment)
+                for request, assessment in zip(requests, assessments, strict=True)
+                if assessment.decision is not Decision.ALLOW or not assessment.child_process_allowed
             ),
             None,
         )
         if blocked is not None:
-            self._render_block(requests[0], blocked)
-            self._record_attempt(manager, argv, blocked, child_started=False)
+            blocked_request, blocked_assessment = blocked
+            self._render_block(blocked_request, blocked_assessment)
+            for assessment in assessments:
+                self._record_attempt(manager, argv, assessment, child_started=False)
             return BLOCK_EXIT_CODE
 
-        result = self._process_runner.run(
-            manager,
-            argv,
-            cwd=self._cwd,
-            env=self._environment,
-        )
-        self._record_attempt(manager, argv, assessments[0], child_started=result.child_started)
+        try:
+            result = self._process_runner.run(
+                manager,
+                argv,
+                cwd=self._cwd,
+                env=self._environment,
+            )
+        except ProcessConfigurationError as exc:
+            self._write(f"SSS UNAVAILABLE — {exc}")
+            for assessment in assessments:
+                self._record_attempt(manager, argv, assessment, child_started=False)
+            return ASSESSMENT_UNAVAILABLE_EXIT_CODE
+        for assessment in assessments:
+            self._record_attempt(manager, argv, assessment, child_started=result.child_started)
         return result.returncode
+
+    def check_only(self, manager: str, arguments: Sequence[str]) -> int:
+        """Assess an install vector without ever starting its package manager."""
+
+        argv = tuple(arguments)
+        try:
+            requests, assessments = self._assess(manager, argv)
+        except ValueError as exc:
+            self._write(f"SSS BLOCK — {exc}")
+            return BLOCK_EXIT_CODE
+        except GuardAdapterError as exc:
+            self._write(f"SSS UNAVAILABLE — {exc}")
+            return ASSESSMENT_UNAVAILABLE_EXIT_CODE
+        for request, assessment in zip(requests, assessments, strict=True):
+            self._render_assessment(request, assessment)
+        return (
+            0
+            if all(
+                item.decision is Decision.ALLOW and item.child_process_allowed
+                for item in assessments
+            )
+            else BLOCK_EXIT_CODE
+        )
+
+    def _assess(
+        self, manager: str, arguments: tuple[str, ...]
+    ) -> tuple[tuple[InstallRequest, ...], tuple[GuardDecisionResult, ...]]:
+        requests = parse_install_argv(
+            manager,
+            arguments,
+            registry_origin=self._registry_origin,
+            pypi_registry_origin=self._pypi_registry_origin,
+            project_id=self._project_id,
+            agent_family=self._agent_family,
+            artifact_sha256=self._artifact_sha256,
+        )
+        return requests, tuple(self._client.check(request) for request in requests)
 
     def _render_block(
         self,
@@ -192,6 +154,18 @@ class GuardRunner:
         if assessment.intervention_id is not None:
             self._write(f"Intervention: {assessment.intervention_id}")
         self._write("Installation was not started.")
+
+    def _render_assessment(
+        self,
+        request: InstallRequest,
+        assessment: GuardDecisionResult,
+    ) -> None:
+        self._write(
+            f"{assessment.decision.value.upper()} "
+            f"{request.package.canonical_name}@{request.version_spec}"
+        )
+        self._write(f"Policy: {assessment.policy_version}")
+        self._write(f"Reasons: {', '.join(assessment.reason_codes)}")
 
     def _record_attempt(
         self,

@@ -30,6 +30,47 @@ def test_parse_pnpm_add_builds_exact_guard_request() -> None:
 
 
 @pytest.mark.parametrize(
+    ("manager", "arguments", "expected_name", "expected_version", "expected_ecosystem"),
+    [
+        ("npm", ("install", "left-pad@1.3.0"), "left-pad", "1.3.0", "npm"),
+        ("yarn", ("add", "left-pad@1.3.0"), "left-pad", "1.3.0", "npm"),
+        ("npx", ("prettier@3.6.2",), "prettier", "3.6.2", "npm"),
+        ("pip", ("install", "requests==2.32.5"), "requests", "==2.32.5", "pypi"),
+        ("pip3", ("install", "requests==2.32.5"), "requests", "==2.32.5", "pypi"),
+        (
+            "python",
+            ("-m", "pip", "install", "requests==2.32.5"),
+            "requests",
+            "==2.32.5",
+            "pypi",
+        ),
+        ("uv", ("add", "requests==2.32.5"), "requests", "==2.32.5", "pypi"),
+        ("uv", ("pip", "install", "requests==2.32.5"), "requests", "==2.32.5", "pypi"),
+    ],
+)
+def test_supported_managers_build_policy_requests(
+    manager: str,
+    arguments: tuple[str, ...],
+    expected_name: str,
+    expected_version: str,
+    expected_ecosystem: str,
+) -> None:
+    request = parse_install_argv(
+        manager,
+        arguments,
+        registry_origin="https://registry.npmjs.org",
+        pypi_registry_origin="https://pypi.org",
+        project_id="project-test",
+        agent_family="test-agent",
+        artifact_sha256="a" * 64,
+    )[0]
+
+    assert request.package.canonical_name == expected_name
+    assert request.package.ecosystem.value == expected_ecosystem
+    assert request.version_spec == expected_version
+
+
+@pytest.mark.parametrize(
     "arguments",
     [
         ("add", "@sss-demo/reserved-synthetic"),
