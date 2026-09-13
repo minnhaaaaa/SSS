@@ -31,9 +31,10 @@ class InterventionStore:
         created_at: datetime | None = None,
     ) -> Intervention:
         if self._repository is not None:
-            for durable_intervention in self._repository.list_interventions(limit=1000):
-                if durable_intervention.intervention_id == decision.decision_id:
-                    return durable_intervention
+            try:
+                return self._repository.get_intervention(decision.decision_id)
+            except KeyError:
+                pass
             intervention = Intervention(
                 intervention_id=decision.decision_id,
                 request=request,

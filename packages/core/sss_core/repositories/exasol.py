@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from time import sleep
 from types import MappingProxyType
 from typing import Any, Protocol
 from urllib.parse import quote
@@ -459,20 +460,28 @@ class ExasolOperationalRepository:
             "child_started": attempt.child_started,
             "attempted_at": _exasol_timestamp(attempt.attempted_at),
         }
-        try:
-            self._connection.execute(
-                "INSERT INTO INSTALL_ATTEMPTS (ATTEMPT_ID, DECISION_ID, COMMAND_SHA256, "
-                "MANAGER, ARGUMENTS_JSON, AGENT_FAMILY, PROJECT_PSEUDONYM, DECISION, "
-                "CHILD_STARTED, ATTEMPTED_AT) VALUES ({attempt_id}, {decision_id}, "
-                "{command_sha256}, {manager}, {arguments_json}, {agent_family}, {project_id}, "
-                "{decision}, {child_started}, {attempted_at})",
-                parameters,
-            )
-            self._connection.commit()
-        except Exception:
-            self._connection.rollback()
-            raise
-        return attempt
+        for retry in range(5):
+            try:
+                self._connection.execute(
+                    "INSERT INTO INSTALL_ATTEMPTS (ATTEMPT_ID, DECISION_ID, COMMAND_SHA256, "
+                    "MANAGER, ARGUMENTS_JSON, AGENT_FAMILY, PROJECT_PSEUDONYM, DECISION, "
+                    "CHILD_STARTED, ATTEMPTED_AT) VALUES ({attempt_id}, {decision_id}, "
+                    "{command_sha256}, {manager}, {arguments_json}, {agent_family}, "
+                    "{project_id}, {decision}, {child_started}, {attempted_at})",
+                    parameters,
+                )
+                self._connection.commit()
+                return attempt
+            except Exception:
+                self._connection.rollback()
+                existing = self.get_attempt(str(parameters["attempt_id"]))
+                if existing is not None:
+                    if existing == attempt:
+                        return existing
+                    break
+                if retry < 4:
+                    sleep(0.02 * (retry + 1))
+        raise RuntimeError("attempt could not be persisted after transaction collisions")
 
     @staticmethod
     def _attempt(row: Sequence[Any]) -> InstallAttempt:
@@ -521,19 +530,30 @@ class ExasolOperationalRepository:
             "created_at": _exasol_timestamp(intervention.created_at),
             "approval_id": intervention.approval_id,
         }
-        try:
-            self._connection.execute(
-                "INSERT INTO INTERVENTIONS (INTERVENTION_ID, DECISION_ID, REQUEST_JSON, "
-                "DECISION_JSON, EVIDENCE_LABELS_JSON, STATUS, CREATED_AT, APPROVAL_ID) VALUES "
-                "({intervention_id}, {decision_id}, {request_json}, {decision_json}, "
-                "{evidence_labels_json}, {status}, {created_at}, {approval_id})",
-                parameters,
-            )
-            self._connection.commit()
-        except Exception:
-            self._connection.rollback()
-            raise
-        return intervention
+        for retry in range(5):
+            try:
+                self._connection.execute(
+                    "INSERT INTO INTERVENTIONS (INTERVENTION_ID, DECISION_ID, REQUEST_JSON, "
+                    "DECISION_JSON, EVIDENCE_LABELS_JSON, STATUS, CREATED_AT, APPROVAL_ID) "
+                    "VALUES ({intervention_id}, {decision_id}, {request_json}, "
+                    "{decision_json}, {evidence_labels_json}, {status}, {created_at}, "
+                    "{approval_id})",
+                    parameters,
+                )
+                self._connection.commit()
+                return intervention
+            except Exception:
+                self._connection.rollback()
+                try:
+                    existing = self.get_intervention(intervention.intervention_id)
+                except KeyError:
+                    if retry < 4:
+                        sleep(0.02 * (retry + 1))
+                    continue
+                if existing == intervention:
+                    return existing
+                break
+        raise RuntimeError("intervention could not be persisted after transaction collisions")
 
     @staticmethod
     def _intervention(row: Sequence[Any]) -> Intervention:
@@ -612,6 +632,10 @@ class ExasolOperationalRepository:
                 parameters,
             )
             if _affected_rows(result) != 1:
+                self._connection.rollback()
+                existing = self.get_intervention(intervention_id)
+                if existing.status is status and existing.approval_id == approval_id:
+                    return existing
                 raise KeyError("pending intervention not found")
             self._connection.commit()
         except Exception:
@@ -700,7 +724,8 @@ class ExasolOperationalRepository:
                 "UPDATE APPROVAL_GRANTS SET CONSUMED_AT={consumed_at}, "
                 "CONSUMED_REQUEST_ID={request_id}, "
                 "CONSUMPTION_METADATA_JSON={metadata_json} WHERE APPROVAL_ID={approval_id} "
-                "AND NONCE={nonce} AND CONSUMED_AT IS NULL",
+                "AND NONCE={nonce} AND REQUEST_ID={request_id} "
+                "AND EXPIRES_AT>{consumed_at} AND CONSUMED_AT IS NULL",
                 parameters,
             )
             if _affected_rows(result) != 1:

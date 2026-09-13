@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Barrier
 from typing import Any
 from uuid import uuid4
 
@@ -53,6 +56,8 @@ class RecordingOperationalConnection:
         self.calls.append((sql, query_params))
         normalized = " ".join(sql.upper().split())
         if normalized.startswith("INSERT INTO INSTALL_ATTEMPTS"):
+            if str(params["attempt_id"]) in self.attempts:
+                raise RuntimeError("unique constraint violation")
             self.attempts[str(params["attempt_id"])] = dict(params)
             return StatementResult([], rowcount=1)
         if normalized.startswith("SELECT ATTEMPT_ID"):
@@ -80,6 +85,8 @@ class RecordingOperationalConnection:
                 ]
             )
         if normalized.startswith("INSERT INTO INTERVENTIONS"):
+            if str(params["intervention_id"]) in self.interventions:
+                raise RuntimeError("unique constraint violation")
             self.interventions[str(params["intervention_id"])] = dict(params)
             return StatementResult([], rowcount=1)
         if normalized.startswith("SELECT INTERVENTION_ID"):
@@ -109,7 +116,7 @@ class RecordingOperationalConnection:
             )
         if normalized.startswith("UPDATE INTERVENTIONS"):
             row = self.interventions.get(str(params["intervention_id"]))
-            if row is None:
+            if row is None or row["status"] != params["pending_status"]:
                 return StatementResult([], rowcount=0)
             row.update(
                 status=params["status"],
@@ -158,7 +165,13 @@ class RecordingOperationalConnection:
             )
         if normalized.startswith("UPDATE APPROVAL_GRANTS"):
             row = self.approvals.get(str(params["approval_id"]))
-            if row is None or row["nonce"] != params["nonce"] or row["consumed_at"] is not None:
+            if (
+                row is None
+                or row["nonce"] != params["nonce"]
+                or row["request_id"] != params["request_id"]
+                or row["expires_at"] <= params["consumed_at"]
+                or row["consumed_at"] is not None
+            ):
                 return StatementResult([], rowcount=0)
             row.update(
                 consumed_at=params["consumed_at"],
@@ -303,6 +316,8 @@ def test_approval_nonce_consumption_is_compare_and_set() -> None:
     connection = RecordingOperationalConnection()
     connection.approvals["approval-1"] = {
         "nonce": "nonce-1",
+        "request_id": "request-1",
+        "expires_at": (NOW + timedelta(minutes=5)).replace(tzinfo=None),
         "consumed_at": None,
         "consumed_request_id": None,
         "consumption_metadata_json": None,
@@ -328,6 +343,37 @@ def test_approval_nonce_consumption_is_compare_and_set() -> None:
     assert connection.approvals["approval-1"]["consumed_request_id"] == "request-1"
     assert connection.commits == 1
     assert connection.rollbacks == 1
+
+
+def test_approval_nonce_rejects_wrong_request_and_expired_first_use() -> None:
+    from sss_core.repositories.exasol import ExasolOperationalRepository
+    from sss_core.repositories.operations import ApprovalNonceConflict
+
+    connection = RecordingOperationalConnection()
+    connection.approvals["approval-1"] = {
+        "nonce": "nonce-1",
+        "request_id": "request-1",
+        "expires_at": (NOW + timedelta(minutes=5)).replace(tzinfo=None),
+        "consumed_at": None,
+        "consumed_request_id": None,
+        "consumption_metadata_json": None,
+    }
+    repository = ExasolOperationalRepository(connection)
+
+    with pytest.raises(ApprovalNonceConflict):
+        repository.consume_approval_nonce(
+            "approval-1", "nonce-1", "request-other", consumed_at=NOW, metadata={}
+        )
+    with pytest.raises(ApprovalNonceConflict):
+        repository.consume_approval_nonce(
+            "approval-1",
+            "nonce-1",
+            "request-1",
+            consumed_at=NOW + timedelta(minutes=6),
+            metadata={},
+        )
+
+    assert connection.approvals["approval-1"]["consumed_at"] is None
 
 
 def test_decision_values_are_bound_and_transactional() -> None:
@@ -395,7 +441,10 @@ def test_intervention_store_reads_and_resolves_durable_state() -> None:
 
     connection = RecordingOperationalConnection()
     first = InterventionStore(repository=ExasolOperationalRepository(connection))
-    fixture = intervention_fixture()
+    fixture = replace(
+        intervention_fixture(),
+        intervention_id=intervention_fixture().decision.decision_id,
+    )
     created = first.create(
         fixture.request,
         fixture.decision,
@@ -431,6 +480,97 @@ async def test_event_broker_resumes_from_durable_numeric_ids() -> None:
     assert second.snapshot(after_id=1) == (second_event,)
 
 
+@pytest.mark.asyncio
+async def test_durable_event_stream_observes_same_and_second_broker_publications() -> None:
+    from sss_api.events import EventBroker
+    from sss_core.repositories.exasol import ExasolOperationalRepository
+
+    connection = RecordingOperationalConnection()
+    first = EventBroker(
+        capacity=10, repository=ExasolOperationalRepository(connection), poll_interval=0.01
+    )
+    second = EventBroker(
+        capacity=10, repository=ExasolOperationalRepository(connection), poll_interval=0.01
+    )
+    stream = first.stream()
+
+    await first.publish("same", {"value": 1})
+    same = await asyncio.wait_for(anext(stream), timeout=0.2)
+    await second.publish("other", {"value": 2})
+    other = await asyncio.wait_for(anext(stream), timeout=0.2)
+    await stream.aclose()
+
+    assert (same.event_type, other.event_type) == ("same", "other")
+
+
+def test_attempt_store_replays_after_duplicate_insert_race() -> None:
+    from sss_api.services.attempts import AttemptStore
+    from sss_core.repositories.exasol import ExasolOperationalRepository
+
+    connection = RecordingOperationalConnection()
+    repository = ExasolOperationalRepository(connection)
+    store = AttemptStore(repository=repository)
+    original = store.record("attempt-key", attempt_fixture(child_started=False))
+
+    connection.claims.clear()
+    replayed = store.record("attempt-key", original)
+
+    assert replayed == original
+    assert len(connection.attempts) == 1
+
+
+def test_intervention_replay_uses_exact_lookup_beyond_list_window() -> None:
+    from sss_api.services.interventions import InterventionStore
+    from sss_core.repositories.exasol import ExasolOperationalRepository
+
+    connection = RecordingOperationalConnection()
+    repository = ExasolOperationalRepository(connection)
+    fixture = replace(
+        intervention_fixture(),
+        intervention_id=intervention_fixture().decision.decision_id,
+    )
+    repository.create_intervention(fixture)
+    for index in range(1001):
+        newer = replace(
+            fixture,
+            intervention_id=f"newer-{index}",
+            created_at=NOW + timedelta(seconds=index + 1),
+        )
+        repository.create_intervention(newer)
+
+    replayed = InterventionStore(repository=repository).create(
+        fixture.request,
+        fixture.decision,
+        evidence_labels=fixture.evidence_labels,
+        created_at=fixture.created_at,
+    )
+
+    assert replayed == fixture
+    assert len(connection.interventions) == 1002
+
+
+def test_intervention_create_and_resolution_are_idempotent() -> None:
+    from sss_api.services.interventions import InterventionStore
+    from sss_core.repositories.exasol import ExasolOperationalRepository
+
+    connection = RecordingOperationalConnection()
+    repository = ExasolOperationalRepository(connection)
+    fixture = intervention_fixture()
+    repository.create_intervention(fixture)
+    store = InterventionStore(repository=repository)
+
+    created = store.create(
+        fixture.request,
+        fixture.decision,
+        evidence_labels=fixture.evidence_labels,
+        created_at=fixture.created_at,
+    )
+    first = store.keep_blocked(created.intervention_id, resolved_at=NOW)
+    replay = store.keep_blocked(created.intervention_id, resolved_at=NOW + timedelta(seconds=1))
+
+    assert replay == first
+
+
 def test_idempotency_hash_is_canonical_and_does_not_expose_payload() -> None:
     from sss_api.idempotency import idempotency_request_hash
 
@@ -449,6 +589,7 @@ def test_idempotency_hash_is_canonical_and_does_not_expose_payload() -> None:
 def test_live_operational_state_survives_connection_recreation() -> None:
     import pyexasol
     from sss_core.repositories.exasol import ExasolOperationalRepository
+    from sss_core.repositories.operations import ApprovalNonceConflict
 
     suffix = uuid4().hex
     decision_id = f"task3-decision-{suffix}"
@@ -514,6 +655,22 @@ def test_live_operational_state_survives_connection_recreation() -> None:
             },
         )
         first_connection.commit()
+        with pytest.raises(ApprovalNonceConflict):
+            first.consume_approval_nonce(
+                approval_id,
+                f"task3-nonce-{suffix}",
+                f"wrong-{request_id}",
+                consumed_at=NOW,
+                metadata={"source": "wrong-request"},
+            )
+        with pytest.raises(ApprovalNonceConflict):
+            first.consume_approval_nonce(
+                approval_id,
+                f"task3-nonce-{suffix}",
+                request_id,
+                consumed_at=NOW + timedelta(hours=2),
+                metadata={"source": "expired"},
+            )
         first.consume_approval_nonce(
             approval_id,
             f"task3-nonce-{suffix}",
@@ -580,3 +737,119 @@ def test_live_operational_state_survives_connection_recreation() -> None:
     finally:
         if not first_closed:
             first_connection.close()
+
+
+@pytest.mark.skipif(
+    not os.getenv("SSS_EXASOL_DSN"),
+    reason="requires an explicitly provisioned Exasol database",
+)
+def test_live_concurrent_attempt_and_intervention_replay() -> None:
+    import pyexasol
+    from sss_api.services.attempts import AttemptStore
+    from sss_api.services.interventions import InterventionStore
+    from sss_core.repositories.exasol import ExasolOperationalRepository
+
+    suffix = uuid4().hex
+    attempt_key = f"task3-race:{suffix}"
+    attempt = replace(
+        attempt_fixture(child_started=False), decision_id=f"race-decision-{suffix}"
+    )
+    base = intervention_fixture()
+    decision = replace(
+        base.decision,
+        decision_id=f"race-intervention-{suffix}",
+        request_id=f"race-request-{suffix}",
+    )
+    request = replace(base.request, request_id=decision.request_id)
+
+    def connect() -> Any:
+        return pyexasol.connect(
+            dsn=os.environ["SSS_EXASOL_DSN"],
+            user=os.environ["SSS_EXASOL_USER"],
+            password=os.environ["SSS_EXASOL_PASSWORD"],
+            schema=os.environ["SSS_EXASOL_SCHEMA"],
+            autocommit=False,
+        )
+
+    class BarrierConnection:
+        def __init__(self, connection: Any, marker: str, barrier: Barrier) -> None:
+            self.connection = connection
+            self.marker = marker
+            self.barrier = barrier
+            self.waited = False
+
+        def execute(self, sql: str, query_params: dict[str, Any] | None = None) -> Any:
+            normalized = " ".join(sql.upper().split())
+            if not self.waited and self.marker in normalized:
+                self.waited = True
+                self.barrier.wait(timeout=10)
+            return self.connection.execute(sql, query_params)
+
+        def commit(self) -> None:
+            self.connection.commit()
+
+        def rollback(self) -> None:
+            self.connection.rollback()
+
+        def close(self) -> None:
+            self.connection.close()
+
+    attempt_barrier = Barrier(2)
+
+    def record_attempt() -> InstallAttempt:
+        connection = BarrierConnection(connect(), "SELECT ATTEMPT_ID", attempt_barrier)
+        try:
+            repository = ExasolOperationalRepository(connection)
+            return AttemptStore(repository=repository).record(attempt_key, attempt)
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        attempt_futures = (executor.submit(record_attempt), executor.submit(record_attempt))
+        attempt_results = tuple(future.result(timeout=20) for future in attempt_futures)
+    assert attempt_results == (attempt, attempt)
+
+    intervention_barrier = Barrier(2)
+
+    def create_intervention() -> Intervention:
+        connection = BarrierConnection(
+            connect(), "SELECT INTERVENTION_ID", intervention_barrier
+        )
+        try:
+            repository = ExasolOperationalRepository(connection)
+            return InterventionStore(repository=repository).create(
+                request,
+                decision,
+                evidence_labels=("race",),
+                created_at=NOW,
+            )
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        intervention_futures = (
+            executor.submit(create_intervention),
+            executor.submit(create_intervention),
+        )
+        intervention_results = tuple(
+            future.result(timeout=20) for future in intervention_futures
+        )
+    assert intervention_results[0] == intervention_results[1]
+
+    cleanup = connect()
+    try:
+        cleanup.execute(
+            "DELETE FROM IDEMPOTENCY_CLAIMS WHERE IDEMPOTENCY_KEY={key}",
+            {"key": attempt_key},
+        )
+        cleanup.execute(
+            "DELETE FROM INSTALL_ATTEMPTS WHERE DECISION_ID={decision_id}",
+            {"decision_id": attempt.decision_id},
+        )
+        cleanup.execute(
+            "DELETE FROM INTERVENTIONS WHERE INTERVENTION_ID={intervention_id}",
+            {"intervention_id": decision.decision_id},
+        )
+        cleanup.commit()
+    finally:
+        cleanup.close()
