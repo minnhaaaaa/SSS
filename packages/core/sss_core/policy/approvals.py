@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 from sss_core.domain import Ecosystem, InstallRequest, PackageIdentity
+from sss_core.identity import canonicalize_identity
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _CLAIMS = {
@@ -20,6 +21,13 @@ _CLAIMS = {
     "policy_version",
 }
 _PACKAGE_CLAIMS = {"ecosystem", "registry_origin", "canonical_name"}
+
+
+def _string_claim(values: Mapping[str, object], name: str) -> str:
+    value = values[name]
+    if not isinstance(value, str):
+        raise ValueError("approval and package claim values must be strings")
+    return value
 
 
 @dataclass(frozen=True)
@@ -69,23 +77,35 @@ class ApprovalScope:
         package_claims = claims["package"]
         if not isinstance(package_claims, Mapping) or set(package_claims) != _PACKAGE_CLAIMS:
             raise ValueError("package claims must contain exactly ecosystem, origin, and name")
-        expires_value = claims["expires_at"]
-        if not isinstance(expires_value, str):
-            raise ValueError("expires_at claim must be an RFC 3339 timestamp")
+        scalar_claims = (
+            "version",
+            "registry_origin",
+            "artifact_sha256",
+            "project_id",
+            "expires_at",
+            "nonce",
+            "policy_version",
+        )
+        claim_values = {name: _string_claim(claims, name) for name in scalar_claims}
+        package_values = {
+            name: _string_claim(package_claims, name) for name in _PACKAGE_CLAIMS
+        }
+        expires_value = claim_values["expires_at"]
         expires_at = datetime.fromisoformat(expires_value.replace("Z", "+00:00"))
+        package = canonicalize_identity(
+            Ecosystem(package_values["ecosystem"]),
+            package_values["registry_origin"],
+            package_values["canonical_name"],
+        )
         return cls(
-            package=PackageIdentity(
-                ecosystem=Ecosystem(str(package_claims["ecosystem"])),
-                registry_origin=str(package_claims["registry_origin"]),
-                canonical_name=str(package_claims["canonical_name"]),
-            ),
-            version=str(claims["version"]),
-            registry_origin=str(claims["registry_origin"]),
-            artifact_sha256=str(claims["artifact_sha256"]),
-            project_id=str(claims["project_id"]),
+            package=package,
+            version=claim_values["version"],
+            registry_origin=claim_values["registry_origin"],
+            artifact_sha256=claim_values["artifact_sha256"],
+            project_id=claim_values["project_id"],
             expires_at=expires_at,
-            nonce=str(claims["nonce"]),
-            policy_version=str(claims["policy_version"]),
+            nonce=claim_values["nonce"],
+            policy_version=claim_values["policy_version"],
         )
 
     def covers(self, request: InstallRequest, *, now: datetime) -> bool:

@@ -39,6 +39,17 @@ def test_npx_package_option_extracts_the_package_not_the_executed_binary() -> No
     ]
 
 
+def test_npx_registry_option_value_is_not_mistaken_for_the_package() -> None:
+    mentions = extract_npm_mentions(
+        "npx --registry https://packages.example.invalid --yes vite@latest"
+    )
+
+    assert [(item.canonical_name, item.version_spec) for item in mentions] == [
+        ("vite", "latest")
+    ]
+    assert mentions[0].requested_registry == "https://packages.example.invalid"
+
+
 def test_extracts_direct_package_json_dependencies() -> None:
     text = json.dumps(
         {

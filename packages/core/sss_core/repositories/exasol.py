@@ -41,6 +41,10 @@ def _statements(document: str) -> tuple[str, ...]:
     return tuple(statement.strip() for statement in statements if statement.strip())
 
 
+def _file_checksum(path: Path) -> str:
+    return hashlib.sha256(path.read_text(encoding="utf-8").encode()).hexdigest()
+
+
 class MigrationRunner:
     def __init__(self, migrations_directory: Path) -> None:
         self._directory = migrations_directory
@@ -69,7 +73,7 @@ class MigrationRunner:
                     "VALUES ({version}, {checksum}, CURRENT_TIMESTAMP)",
                     {
                         "version": version,
-                        "checksum": hashlib.sha256(document.encode()).hexdigest(),
+                        "checksum": _file_checksum(path),
                     },
                 )
                 applied.append(version)
@@ -113,7 +117,7 @@ class SchemaReadinessChecker:
 
     def check(self, connection: ExasolConnection) -> SchemaReadiness:
         expected = {
-            path.stem: hashlib.sha256(path.read_bytes()).hexdigest()
+            path.stem: _file_checksum(path)
             for path in sorted(self._migrations_directory.glob("[0-9][0-9][0-9]_*.sql"))
         }
         migration_rows = _rows(

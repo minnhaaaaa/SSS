@@ -100,3 +100,19 @@ def test_claims_reject_unknown_fields_and_naive_expiry() -> None:
 
     with pytest.raises(ValueError, match="timezone"):
         replace(_scope(now), expires_at=datetime(2026, 9, 7))
+
+
+def test_claims_reject_type_coercion_and_invalid_package_identity() -> None:
+    now = datetime(2026, 9, 7, tzinfo=UTC)
+    claims = _scope(now).to_claims()
+    claims["version"] = 1
+    with pytest.raises(ValueError, match="strings"):
+        ApprovalScope.from_claims(claims)
+
+    claims = _scope(now).to_claims()
+    package = claims["package"]
+    assert isinstance(package, dict)
+    package["registry_origin"] = "https://user:password@example.test"
+    claims["registry_origin"] = "https://user:password@example.test"
+    with pytest.raises(ValueError, match="credentials"):
+        ApprovalScope.from_claims(claims)

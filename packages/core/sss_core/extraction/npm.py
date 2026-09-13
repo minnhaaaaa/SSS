@@ -167,7 +167,17 @@ def _parse_commands(text: str) -> list[ExtractedPackage]:
                     package_options.append(value.split("=", maxsplit=1)[1])
                 index += 1
             if not package_options:
-                package_options = [value for value in argv[1:] if not value.startswith("-")][:1]
+                index = 1
+                while index < len(argv):
+                    value = argv[index]
+                    if value == "--registry":
+                        index += 2
+                        continue
+                    if value.startswith("--registry=") or value.startswith("-"):
+                        index += 1
+                        continue
+                    package_options = [value]
+                    break
             mentions.extend(
                 _classify_spec(spec, requested_registry=registry) for spec in package_options
             )
