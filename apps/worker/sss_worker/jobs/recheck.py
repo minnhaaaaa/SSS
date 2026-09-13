@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 from sss_core.domain import CandidateStatus, Ecosystem, PackageIdentity
 from sss_core.registries.base import RegistryEvidence, RegistryOracle, RegistryOutcome
@@ -59,10 +60,14 @@ class MemoryRecheckSink:
         return True
 
 
+class RecheckSink(Protocol):
+    def record(self, evidence: RegistryEvidence) -> bool: ...
+
+
 async def recheck_watchlist(
     identities: Sequence[PackageIdentity],
     oracles: Mapping[Ecosystem, RegistryOracle],
-    sink: MemoryRecheckSink,
+    sink: RecheckSink,
 ) -> int:
     new_evidence = 0
     for identity in dict.fromkeys(identities):

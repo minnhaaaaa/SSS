@@ -23,6 +23,7 @@ dependencies = [
 
 [project.scripts]
 sss = "sss_cli.main:app"
+sss-worker = "sss_worker.main:app"
 sss-demo-agent = "sss_demo_agent.main:main"
 
 [dependency-groups]

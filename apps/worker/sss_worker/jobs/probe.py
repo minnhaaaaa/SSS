@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from sss_core.domain import Ecosystem, EvidenceProvenance
 from sss_core.extraction.npm import extract_npm_mentions
@@ -83,6 +85,10 @@ class MemoryObservationSink:
         self.deletions.add(source_id)
 
 
+class ObservationSink(Protocol):
+    def record(self, observation: CollectedObservation) -> bool: ...
+
+
 def load_prompt_manifest(path: Path) -> tuple[PromptTask, ...]:
     tasks: list[PromptTask] = []
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -129,11 +135,15 @@ def make_observation(
 async def run_probe_suite(
     provider: ModelProvider,
     tasks: list[PromptTask],
-    sink: MemoryObservationSink,
+    sink: ObservationSink,
+    *,
+    concurrency: int = 1,
 ) -> CollectionResult:
-    new_mentions = 0
-    for task in tasks:
-        response = await provider.generate(task.task_id, task.prompt)
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def collect(task: PromptTask) -> tuple[CollectedObservation, ...]:
+        async with semaphore:
+            response = await provider.generate(task.task_id, task.prompt)
         configuration = json.dumps(
             {
                 "provider": response.provider,
@@ -153,13 +163,19 @@ async def run_probe_suite(
             if task.ecosystem is Ecosystem.PYPI
             else extract_npm_mentions(response.text)
         )
-        for mention in mentions:
-            observation = make_observation(
+        return tuple(
+            make_observation(
                 provenance=EvidenceProvenance.MODEL_PROBE,
                 source_id=run_id,
                 ecosystem=task.ecosystem,
                 canonical_name=mention.canonical_name,
                 model_configuration_sha256=configuration_hash,
             )
+            for mention in mentions
+        )
+
+    new_mentions = 0
+    for observations in await asyncio.gather(*(collect(task) for task in tasks)):
+        for observation in observations:
             new_mentions += sink.record(observation)
     return CollectionResult(new_mentions)

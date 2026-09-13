@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Protocol
 
 from sss_core.domain import Ecosystem, EvidenceProvenance
 from sss_core.extraction.npm import extract_npm_mentions
 from sss_core.extraction.python import extract_python_mentions
 
-from sss_worker.jobs.probe import CollectionResult, MemoryObservationSink, make_observation
+from sss_worker.jobs.probe import CollectedObservation, CollectionResult, make_observation
 
 _NPM_NOT_FOUND = re.compile(r"404 Not Found - GET \S+/(@?[^/\s]+(?:/[^/\s]+)?)", re.IGNORECASE)
 _PYPI_NOT_FOUND = re.compile(r"No matching distribution found for ([A-Za-z0-9._-]+)")
@@ -32,6 +33,12 @@ class GitHubPage:
     next_cursor: str | None
     artifacts: tuple[GitHubArtifact, ...]
     rate_limited: bool = False
+
+
+class PublicSourceSink(Protocol):
+    def record(self, observation: CollectedObservation) -> bool: ...
+    def record_deletion(self, source_id: str) -> None: ...
+    def save_cursor(self, source: str, cursor: str | None) -> None: ...
 
 
 def _manifest_mentions(artifact: GitHubArtifact) -> tuple[tuple[Ecosystem, str], ...]:
@@ -61,7 +68,7 @@ def _failure_mentions(artifact: GitHubArtifact) -> tuple[tuple[Ecosystem, str], 
 
 def scan_public_sources(
     page: GitHubPage,
-    sink: MemoryObservationSink,
+    sink: PublicSourceSink,
 ) -> CollectionResult:
     if page.rate_limited:
         return CollectionResult(0, rate_limited=True)
