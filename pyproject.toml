@@ -23,6 +23,7 @@ dependencies = [
 
 [project.scripts]
 sss = "sss_cli.main:app"
+sss-demo-agent = "sss_demo_agent.main:main"
 
 [dependency-groups]
 dev = [
@@ -44,6 +45,7 @@ packages = [
   "apps/cli/sss_cli",
   "apps/gateway/sss_gateway",
   "demo/canary/sss_canary",
+  "demo/agent/sss_demo_agent",
 ]
 
 [tool.pytest.ini_options]
@@ -60,12 +62,13 @@ pythonpath = [
   "apps/cli",
   "apps/gateway",
   "demo/canary",
+  "demo/agent",
 ]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-packages = ["sss_core", "sss_worker", "sss_api", "sss_cli", "sss_gateway", "sss_canary"]
+packages = ["sss_core", "sss_worker", "sss_api", "sss_cli", "sss_gateway", "sss_canary", "sss_demo_agent"]
 mypy_path = [
   ".",
   "packages/core",
@@ -74,6 +77,7 @@ mypy_path = [
   "apps/cli",
   "apps/gateway",
   "demo/canary",
+  "demo/agent",
 ]
 
 [tool.ruff]
