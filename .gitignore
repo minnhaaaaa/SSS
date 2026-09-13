@@ -1,0 +1,31 @@
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Frontend dependencies and generated output
+node_modules/
+.pnpm-store/
+apps/web/dist/
+coverage/
+
+# Test and temporary output
+playwright-report/
+test-results/
+*.log
+*.tmp
+
+# Local tooling and operating-system files
+.venv/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Other teammate worktrees that are not part of this frontend branch
+apps/api/
+apps/cli/
+apps/gateway/
+demo/
+infra/
+tests/

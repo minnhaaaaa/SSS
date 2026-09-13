@@ -1,0 +1,10 @@
+{
+  "name": "sss",
+  "private": true,
+  "scripts": {
+    "web:build": "pnpm --filter @sss/web build",
+    "web:dev": "pnpm --filter @sss/web dev",
+    "web:test": "pnpm --filter @sss/web test",
+    "web:typecheck": "pnpm --filter @sss/web typecheck"
+  }
+}
