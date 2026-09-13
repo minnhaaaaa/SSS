@@ -8,20 +8,15 @@ interface OverviewRadarProps {
   readonly nodes: readonly PackageSummary[];
   readonly onSelectPackage: (name: string) => void;
   readonly stats?: readonly RadarStat[];
-  readonly legendStats?: readonly RadarLegendStat[];
+  readonly showStateLegend?: boolean;
 }
 
 type EcosystemFilter = "all" | Ecosystem;
-type SignalFilter = "risk" | "protected" | "verified";
 
 interface RadarStat {
   readonly label: string;
   readonly value: number;
   readonly color: string;
-}
-
-interface RadarLegendStat extends RadarStat {
-  readonly kind: SignalFilter;
 }
 
 interface PositionedNode {
@@ -41,11 +36,13 @@ const radarPositions = [
   [252, 326],
 ] as const;
 
-export function OverviewRadar({ nodes, onSelectPackage, stats = [], legendStats = [] }: OverviewRadarProps) {
+const legendStates: readonly PackageState[] = ["absent", "monitored", "registered", "high_risk", "blocked"];
+
+export function OverviewRadar({ nodes, onSelectPackage, stats = [], showStateLegend = false }: OverviewRadarProps) {
   const [ecosystem, setEcosystem] = useState<EcosystemFilter>("all");
   const [query, setQuery] = useState("");
   const [zoom, setZoom] = useState(1);
-  const [signalFilter, setSignalFilter] = useState<SignalFilter | null>(null);
+  const [stateFilter, setStateFilter] = useState<PackageState | null>(null);
   const [hoveredName, setHoveredName] = useState<string | null>(null);
   const [lastHoveredName, setLastHoveredName] = useState(nodes[0]?.name ?? null);
   const radarField = useRef<HTMLDivElement>(null);
@@ -55,9 +52,9 @@ export function OverviewRadar({ nodes, onSelectPackage, stats = [], legendStats 
       (item) =>
         (ecosystem === "all" || item.ecosystem === ecosystem) &&
         (!normalized || item.name.toLocaleLowerCase().includes(normalized)) &&
-        (!signalFilter || matchesSignal(item.state, signalFilter)),
+        (!stateFilter || item.state === stateFilter),
     );
-  }, [ecosystem, nodes, query, signalFilter]);
+  }, [ecosystem, nodes, query, stateFilter]);
   const positioned = useMemo(
     () => filtered.slice(0, radarPositions.length).map((item, index) => positionNode(item, index)),
     [filtered],
@@ -116,28 +113,6 @@ export function OverviewRadar({ nodes, onSelectPackage, stats = [], legendStats 
           />
         </label>
 
-        {legendStats.length > 0 && (
-          <div className="flex basis-full flex-wrap items-center gap-1 md:ml-auto md:basis-auto" aria-label="Radar signal legend">
-            {legendStats.map((item) => {
-              const active = signalFilter === item.kind;
-              return (
-                <button
-                  key={item.kind}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setSignalFilter((value) => value === item.kind ? null : item.kind)}
-                  className="flex h-7 items-center gap-1.5 rounded-full border px-1.5 pr-2.5 font-mono text-[0.55rem] text-[#0C0F0C] transition hover:bg-[#FFF9F4]/28 focus-visible:outline-none"
-                  style={{ borderColor: active ? item.color : "#0C0F0C33", backgroundColor: active ? `${item.color}88` : "transparent" }}
-                >
-                  <strong className="grid size-5 place-items-center rounded-full text-[0.58rem]" style={{ backgroundColor: item.color }}>
-                    {item.value}
-                  </strong>
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       <div className="mt-2 h-px shrink-0 bg-[#0C0F0C]" aria-hidden="true" />
@@ -154,6 +129,39 @@ export function OverviewRadar({ nodes, onSelectPackage, stats = [], legendStats 
           ))}
         </div>}
 
+        {showStateLegend && (
+          <div className="absolute top-4 left-4 z-20 text-[#FFF9F4]" aria-label="Radar node legend">
+            <p className="m-0 mb-1.5 text-[0.66rem] font-semibold text-[#FFF9F4]">Package State</p>
+            <div className="grid gap-0.5">
+              {legendStates.map((state) => {
+                const color = stateColor(state);
+                const active = stateFilter === state;
+                return (
+                  <button
+                    key={state}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setStateFilter((value) => value === state ? null : state)}
+                    className="group flex h-[21px] w-fit items-center gap-2 border-0 bg-transparent p-0 pr-2 font-mono text-[0.58rem] uppercase text-[#FFF9F4] transition hover:text-white focus-visible:outline-none"
+                  >
+                    <span
+                      className="size-[15px] rounded-full border transition-transform group-hover:scale-110"
+                      style={{
+                        backgroundColor: color,
+                        borderColor: active ? "#FFF9F4" : color,
+                        boxShadow: active ? `0 0 0 2px #0C0F0C, 0 0 0 3px ${color}` : "none",
+                        transform: active ? "scale(1.12)" : undefined,
+                      }}
+                      aria-hidden="true"
+                    />
+                    {titleCase(state)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="absolute right-4 bottom-4 z-20 flex items-center gap-1.5 rounded-full border border-[#FFF9F4]/12 bg-[#1E3B29]/95 p-1 shadow-[0_10px_26px_rgba(0,0,0,0.32)] backdrop-blur" aria-label="Radar controls">
           <RadarControl label="Zoom out" onClick={() => setZoom((value) => clampZoom(value - 0.15))}>
             <Minus size={13} />
@@ -164,7 +172,7 @@ export function OverviewRadar({ nodes, onSelectPackage, stats = [], legendStats 
           <RadarControl label="Zoom in" onClick={() => setZoom((value) => clampZoom(value + 0.15))}>
             <Plus size={13} />
           </RadarControl>
-          <RadarControl label="Reset radar" onClick={() => { setZoom(1); setEcosystem("all"); setSignalFilter(null); setQuery(""); setHoveredName(null); }}>
+          <RadarControl label="Reset radar" onClick={() => { setZoom(1); setEcosystem("all"); setStateFilter(null); setQuery(""); setHoveredName(null); }}>
             <LocateFixed size={13} />
           </RadarControl>
         </div>
@@ -283,22 +291,22 @@ function NodeTooltip({ node, visible, zoom }: { readonly node: PositionedNode; r
       <g transform="translate(640 48)">
         <rect width="220" height="112" rx="5" fill="#0C0F0C" stroke={color} strokeWidth="1.25" />
         <rect width="3" height="112" rx="1.5" fill={color} />
-        <text x="14" y="18" fill={color} fontFamily="monospace" fontSize="8" fontWeight="700" letterSpacing="0.5">
+        <text x="14" y="18" fill={color} fontFamily="monospace" fontSize="9.2" fontWeight="700" letterSpacing="0.5">
           NODE INTELLIGENCE
         </text>
-        <text x="14" y="36" fill="#FFF9F4" fontFamily="monospace" fontSize="9" fontWeight="700">
+        <text x="14" y="36" fill="#FFF9F4" fontFamily="monospace" fontSize="10.4" fontWeight="700">
           {node.item.name}
         </text>
-        <text x="14" y="53" fill="#BCC9CD" fontFamily="monospace" fontSize="7.5">
+        <text x="14" y="53" fill="#BCC9CD" fontFamily="monospace" fontSize="8.6">
           REGISTRY  {node.item.ecosystem.toUpperCase()}   ·   STATE  {titleCase(node.item.state).toUpperCase()}
         </text>
-        <text x="14" y="69" fill="#BCC9CD" fontFamily="monospace" fontSize="7.5">
+        <text x="14" y="69" fill="#BCC9CD" fontFamily="monospace" fontSize="8.6">
           ATTRACTIVENESS  {node.item.attractiveness} / 100
         </text>
-        <text x="14" y="85" fill="#BCC9CD" fontFamily="monospace" fontSize="7.5">
+        <text x="14" y="85" fill="#BCC9CD" fontFamily="monospace" fontSize="8.6">
           POLICY RISK  {policyRisk}
         </text>
-        <text x="14" y="101" fill="#BCC9CD" fontFamily="monospace" fontSize="7.5">
+        <text x="14" y="101" fill="#BCC9CD" fontFamily="monospace" fontSize="8.6">
           LAST SEEN  {formatRadarDate(node.item.lastSeen)}
         </text>
       </g>
@@ -312,16 +320,11 @@ function positionNode(item: PackageSummary, index: number): PositionedNode {
 }
 
 function stateColor(state: PackageState): string {
-  if (state === "blocked" || state === "high_risk") return "#D9544F";
+  if (state === "blocked") return "#EF4444";
+  if (state === "high_risk") return "#D9544F";
   if (state === "registered") return "#E6AA3C";
   if (state === "monitored") return "#4CD7F6";
   return "#FFF9F4";
-}
-
-function matchesSignal(state: PackageState, filter: SignalFilter): boolean {
-  if (filter === "risk") return state === "blocked" || state === "high_risk";
-  if (filter === "protected") return state === "monitored";
-  return state === "registered";
 }
 
 function clampZoom(value: number): number {
