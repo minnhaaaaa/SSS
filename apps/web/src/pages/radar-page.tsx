@@ -8,13 +8,6 @@ import { useApiResource } from "../hooks/use-api-resource";
 export function RadarPage() {
   const { liveRevision, openPackage } = useControlRoom();
   const resource = useApiResource((signal) => api.getOverview(signal), [liveRevision]);
-  const legendStats = resource.data
-    ? [
-        { kind: "risk", value: resource.data.activeThreats, label: "High-Risk Threats", color: "#D9544F" },
-        { kind: "protected", value: resource.data.protectedAgents, label: "Active Protected Agents", color: "#4CD7F6" },
-        { kind: "verified", value: resource.data.verifiedRecommendations, label: "Verified Recurrences", color: "#E6AA3C" },
-      ] as const
-    : [];
 
   return (
     <PageFrame
@@ -28,7 +21,8 @@ export function RadarPage() {
         <section className="radar-page-surface flex min-w-0 flex-col rounded-[20px] bg-[#626362] p-5" data-reveal>
           <OverviewRadar
             nodes={resource.data.radarNodes}
-            legendStats={legendStats}
+            showStateLegend
+            initialZoom={1.1}
             onSelectPackage={openPackage}
           />
         </section>
