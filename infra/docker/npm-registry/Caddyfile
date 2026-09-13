@@ -1,0 +1,4 @@
+npm.demo.sss.test:443 {
+    tls /tls/npm.demo.sss.test.crt /tls/npm.demo.sss.test.key
+    reverse_proxy registry:4873
+}

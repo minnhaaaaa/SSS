@@ -74,3 +74,23 @@ def test_reset_and_replay_are_each_transactional() -> None:
         or parameters["canonical_name"] == fixture.package.canonical_name
         for _, parameters in connection.calls
     )
+
+
+def test_registration_preserves_identity_and_records_transition() -> None:
+    fixture = load_demo_fixture(ROOT / "demo/fixtures/fixed-intelligence.json")
+    connection = RecordingConnection()
+    repository = ExasolDemoRepository(connection)
+
+    repository.record_registration(fixture)
+
+    sql = " ".join(statement for statement, _ in connection.calls)
+    assert "registered_after_absence" in sql
+    assert "INSERT INTO PACKAGE_RELEASES" in sql
+    assert "INSERT INTO REGISTRY_CHECKS" in sql
+    assert fixture.package.canonical_name not in sql
+    assert all(
+        parameters.get("registry_origin", fixture.package.registry_origin)
+        == fixture.package.registry_origin
+        for _, parameters in connection.calls
+    )
+    assert connection.commits == 1

@@ -1,0 +1,11 @@
+{
+  "name": "@sss-demo/reserved-synthetic",
+  "version": "1.0.0",
+  "description": "Controlled SSS demo package; never publish to a public registry",
+  "private": false,
+  "scripts": {
+    "install": "node install.mjs"
+  },
+  "files": ["install.mjs"],
+  "license": "MIT"
+}

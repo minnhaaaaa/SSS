@@ -1,0 +1,105 @@
+name: sss-agent-guard-demo
+
+services:
+  api:
+    image: ${SSS_API_IMAGE:-sss-api:local}
+    command: ["uvicorn", "--factory", "sss_api.main:create_app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      SSS_ENV: demo
+      SSS_POLICY_VERSION: sss-hackathon-v3
+      SSS_API_BEARER_TOKENS: ${SSS_API_BEARER_TOKENS:?Set the operator and agent tokens}
+      SSS_APPROVAL_SIGNING_KEY: ${SSS_APPROVAL_SIGNING_KEY:?Set a local demo signing key}
+      SSS_EXASOL_DSN: sss-exasol:8563
+      SSS_EXASOL_USER: ${SSS_EXASOL_USER:-sys}
+      SSS_EXASOL_PASSWORD: ${SSS_EXASOL_PASSWORD:?Set the local Exasol password}
+      SSS_EXASOL_SCHEMA: ${SSS_EXASOL_SCHEMA:-SSS}
+      SSS_EXASOL_REQUIRED: "true"
+      USER: sss
+    networks: [protected, control-plane, exasol]
+    ports: ["127.0.0.1:${SSS_API_HOST_PORT:-8000}:8000"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  canary:
+    image: ${SSS_API_IMAGE:-sss-api:local}
+    command: ["uvicorn", "--factory", "sss_canary.main:create_app", "--host", "0.0.0.0", "--port", "8090"]
+    environment:
+      SSS_CANARY_DATABASE_PATH: /state/events.db
+      SSS_CANARY_TOKEN: ${SSS_CANARY_TOKEN:?Set the local canary token}
+      SSS_CANARY_MARKER: DEMO_ONLY_NOT_A_SECRET
+    volumes: [canary-state:/state]
+    networks: [protected]
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,noexec,nosuid,nodev
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  registry:
+    image: ${SSS_VERDACCIO_IMAGE:-verdaccio/verdaccio:6.2.1@sha256:eacab3ef5f8ec2eff16aad1ff303e0703150f86eeccb40d0e36f985930c5a3a6}
+    volumes:
+      - ./npm-registry/config.yaml:/verdaccio/conf/config.yaml:ro
+      - registry-state:/verdaccio/storage
+    networks: [protected]
+
+  registry-tls:
+    image: ${SSS_CADDY_IMAGE:-caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d}
+    user: "0:0"
+    volumes:
+      - ./npm-registry/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../.runtime/tls:/tls:ro
+    networks:
+      protected:
+        aliases: [npm.demo.sss.test]
+    depends_on: [registry]
+    read_only: true
+    tmpfs:
+      - /data:size=16m
+      - /config:size=4m
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+
+  protected-agent:
+    image: ${SSS_AGENT_IMAGE:-sss-agent:local}
+    user: "65532:65532"
+    environment:
+      PATH: /opt/sss/shims:/opt/sss/.venv/bin:/usr/local/bin:/usr/bin:/bin
+      SSS_API_URL: http://api:8000
+      SSS_API_TOKEN: ${SSS_AGENT_API_TOKEN:?Set a short-lived agent token}
+      SSS_GATEWAY_URL: http://registry-tls:443
+      SSS_NPM_REGISTRY_URL: https://npm.demo.sss.test
+      SSS_PROJECT_ID: project-demo
+      SSS_AGENT_FAMILY: codex
+      SSS_DEMO_ARTIFACT_SHA256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      SSS_REAL_EXECUTABLES_JSON: '{"pnpm":"/usr/local/bin/pnpm"}'
+      NODE_EXTRA_CA_CERTS: /run/sss-tls/npm.demo.sss.test.crt
+    volumes:
+      - ../../.runtime/tls/npm.demo.sss.test.crt:/run/sss-tls/npm.demo.sss.test.crt:ro
+      - agent-workspace:/workspace
+    networks: [protected]
+    depends_on: [api, registry-tls]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 1
+
+networks:
+  protected:
+    internal: true
+  control-plane: {}
+  exasol:
+    external: true
+    name: sss-local-exasol_default
+
+volumes:
+  agent-workspace: {}
+  canary-state: {}
+  registry-state: {}

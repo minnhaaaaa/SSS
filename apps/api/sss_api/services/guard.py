@@ -27,6 +27,10 @@ class EvidenceProvider(Protocol):
     def context_for(self, package: PackageIdentity) -> PolicyContext: ...
 
 
+class RadarRepository(Protocol):
+    def load_evidence(self, *, ecosystem: str, origin: str, name: str) -> dict[str, object]: ...
+
+
 @dataclass(frozen=True, slots=True)
 class GuardAssessment:
     decision: PolicyDecision
@@ -59,6 +63,46 @@ class FixedDemoEvidenceProvider:
             interactive=False,
             historical_hallucination=False,
         )
+
+
+class ExasolDemoEvidenceProvider:
+    """Require Exasol's private Radar row before returning the frozen demo assessment."""
+
+    def __init__(self, fixture: FixedDemoFixture, repository: RadarRepository) -> None:
+        self._fixture = fixture
+        self._repository = repository
+        self._fallback = FixedDemoEvidenceProvider(fixture)
+
+    def context_for(self, package: PackageIdentity) -> PolicyContext:
+        if package != self._fixture.package:
+            return self._fallback.context_for(package)
+        row = self._repository.load_evidence(
+            ecosystem=package.ecosystem.value,
+            origin=package.registry_origin,
+            name=package.canonical_name,
+        )
+        expected = {
+            "ECOSYSTEM": "npm",
+            "REGISTRY_ORIGIN": "https://npm.demo.sss.test",
+            "CANONICAL_NAME": "@sss-demo/reserved-synthetic",
+            "STATUS": "registered_after_absence",
+            "VERIFIED_MODEL_RECOMMENDATIONS": 46,
+            "MODEL_CONFIGURATIONS": 3,
+            "PROTECTED_AGENT_ATTEMPTS": 8,
+            "PUBLIC_FAILED_REFERENCES": 5,
+            "OBSERVATION_DAYS": 11,
+        }
+        if any(row.get(key) != value for key, value in expected.items()):
+            return PolicyContext(
+                candidate_status=CandidateStatus.AMBIGUOUS,
+                registry_outcome=RegistryOutcome.UNKNOWN_RESPONSE,
+                scores=EvidenceScores(None, 0, 0),
+                approved_source=False,
+                strict_mode=True,
+                interactive=False,
+                historical_hallucination=False,
+            )
+        return self._fallback.context_for(package)
 
 
 class GuardService:

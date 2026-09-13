@@ -12,7 +12,9 @@ WORKDIR /opt/sss
 COPY pyproject.toml ./
 COPY uv.lock ./
 COPY apps ./apps
+COPY packages ./packages
 COPY demo ./demo
+COPY infra/exasol ./infra/exasol
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \

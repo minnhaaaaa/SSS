@@ -6,7 +6,9 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from sss_core import PolicyEngine
+from sss_core.config import ExasolSettings
 from sss_core.demo import load_demo_fixture
+from sss_core.repositories.exasol import ExasolPolicyRepository, SchemaReadinessChecker
 
 from sss_api.config import ApiSettings
 from sss_api.events import EventBroker
@@ -16,8 +18,15 @@ from sss_api.routes import approvals, attempts, demo, events, guard, health, int
 from sss_api.services.approvals import ApprovalService
 from sss_api.services.attempts import AttemptStore
 from sss_api.services.demo import DemoController, NoopDemoRepository
-from sss_api.services.guard import FixedDemoEvidenceProvider, GuardService
+from sss_api.services.guard import (
+    EvidenceProvider,
+    ExasolDemoEvidenceProvider,
+    FixedDemoEvidenceProvider,
+    GuardService,
+)
 from sss_api.services.interventions import InterventionStore
+
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def create_app(
@@ -41,10 +50,32 @@ def create_app(
             signing_key=resolved_settings.approval_signing_key.encode()
         )
     if guard_service is None:
-        fixture_path = Path(__file__).resolve().parents[3] / "demo/fixtures/fixed-intelligence.json"
+        fixture_path = ROOT / "demo/fixtures/fixed-intelligence.json"
+        fixture = load_demo_fixture(fixture_path)
+        evidence_provider: EvidenceProvider = FixedDemoEvidenceProvider(fixture)
+        if resolved_settings.exasol_required:
+            import pyexasol  # type: ignore[import-untyped]
+
+            exasol_settings = ExasolSettings.from_env()
+            connection = pyexasol.connect(
+                dsn=exasol_settings.dsn,
+                user=exasol_settings.user,
+                password=exasol_settings.password,
+                schema=exasol_settings.schema,
+                autocommit=False,
+            )
+            readiness = SchemaReadinessChecker(
+                ROOT / "infra/exasol/migrations"
+            ).check(connection)
+            if not readiness.ready:
+                raise RuntimeError("Exasol schema is not ready for Guard decisions")
+            evidence_provider = ExasolDemoEvidenceProvider(
+                fixture,
+                ExasolPolicyRepository(connection),
+            )
         guard_service = GuardService(
             PolicyEngine(),
-            FixedDemoEvidenceProvider(load_demo_fixture(fixture_path)),
+            evidence_provider,
             store,
             broker,
         )

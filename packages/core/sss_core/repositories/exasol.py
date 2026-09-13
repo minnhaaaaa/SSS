@@ -240,12 +240,28 @@ class ExasolPolicyRepository:
 
     def load_evidence(self, *, ecosystem: str, origin: str, name: str) -> dict[str, object]:
         result = self._connection.execute(
-            "SELECT * FROM V_RADAR_PRIVATE WHERE ECOSYSTEM={ecosystem} "
+            "SELECT ECOSYSTEM, REGISTRY_ORIGIN, CANONICAL_NAME, STATUS, "
+            "VERIFIED_MODEL_RECOMMENDATIONS, MODEL_CONFIGURATIONS, "
+            "PROTECTED_AGENT_ATTEMPTS, PUBLIC_FAILED_REFERENCES, OBSERVATION_DAYS "
+            "FROM V_RADAR_PRIVATE WHERE ECOSYSTEM={ecosystem} "
             "AND REGISTRY_ORIGIN={origin} AND CANONICAL_NAME={name}",
             {"ecosystem": ecosystem, "origin": origin, "name": name},
         )
         rows = _rows(result)
-        return {} if not rows else {str(index): value for index, value in enumerate(rows[0])}
+        if not rows:
+            return {}
+        columns = (
+            "ECOSYSTEM",
+            "REGISTRY_ORIGIN",
+            "CANONICAL_NAME",
+            "STATUS",
+            "VERIFIED_MODEL_RECOMMENDATIONS",
+            "MODEL_CONFIGURATIONS",
+            "PROTECTED_AGENT_ATTEMPTS",
+            "PUBLIC_FAILED_REFERENCES",
+            "OBSERVATION_DAYS",
+        )
+        return dict(zip(columns, rows[0], strict=True))
 
 
 class ExasolDemoRepository:
@@ -348,6 +364,59 @@ class ExasolDemoRepository:
                 },
             )
             self._insert_replay_sources(fixture, identity)
+            self._connection.commit()
+        except Exception:
+            self._connection.rollback()
+            raise
+
+    def record_registration(self, fixture: FixedDemoFixture) -> None:
+        """Append the fixture registration without mutating its historical absence evidence."""
+
+        identity = self._identity_parameters(fixture)
+        try:
+            self._connection.execute(
+                "UPDATE CANDIDATES SET STATUS='registered_after_absence', "
+                "FIRST_REGISTRATION_AT={registered_at} WHERE ECOSYSTEM={ecosystem} "
+                "AND REGISTRY_ORIGIN={registry_origin} AND CANONICAL_NAME={canonical_name}",
+                {**identity, "registered_at": _exasol_timestamp(fixture.registered_at)},
+            )
+            self._connection.execute(
+                "DELETE FROM REGISTRY_CHECKS WHERE CHECK_ID={check_id}",
+                {"check_id": "demo-registration-check"},
+            )
+            self._connection.execute(
+                "INSERT INTO REGISTRY_CHECKS (CHECK_ID, ECOSYSTEM, REGISTRY_ORIGIN, "
+                "CANONICAL_NAME, ENDPOINT, STATUS, HTTP_STATUS, CHECKED_AT, RESPONSE_SHA256, "
+                "ERROR_CLASS) VALUES ({check_id}, {ecosystem}, {registry_origin}, "
+                "{canonical_name}, {endpoint}, 'registered', 200, {checked_at}, "
+                "{response_sha256}, NULL)",
+                {
+                    **identity,
+                    "check_id": "demo-registration-check",
+                    "endpoint": (
+                        f"{fixture.package.registry_origin}/"
+                        f"{quote(fixture.package.canonical_name, safe='@')}"
+                    ),
+                    "checked_at": _exasol_timestamp(fixture.registered_at),
+                    "response_sha256": "d" * 64,
+                },
+            )
+            self._connection.execute(
+                "DELETE FROM PACKAGE_RELEASES WHERE RELEASE_ID={release_id}",
+                {"release_id": "demo-release-1.0.0"},
+            )
+            self._connection.execute(
+                "INSERT INTO PACKAGE_RELEASES (RELEASE_ID, ECOSYSTEM, REGISTRY_ORIGIN, "
+                "CANONICAL_NAME, VERSION, UPLOADED_AT, FIRST_SEEN_AT, ARTIFACT_SHA256) "
+                "VALUES ({release_id}, {ecosystem}, {registry_origin}, {canonical_name}, "
+                "'1.0.0', {registered_at}, {registered_at}, {artifact_sha256})",
+                {
+                    **identity,
+                    "release_id": "demo-release-1.0.0",
+                    "registered_at": _exasol_timestamp(fixture.registered_at),
+                    "artifact_sha256": "b" * 64,
+                },
+            )
             self._connection.commit()
         except Exception:
             self._connection.rollback()

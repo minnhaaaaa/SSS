@@ -22,6 +22,13 @@ def _positive_int(values: Mapping[str, str], key: str, default: int) -> int:
     return parsed
 
 
+def _boolean(values: Mapping[str, str], key: str, default: bool) -> bool:
+    raw = values.get(key, str(default)).casefold()
+    if raw not in {"true", "false"}:
+        raise ConfigurationError(f"{key} must be true or false")
+    return raw == "true"
+
+
 @dataclass(frozen=True, slots=True)
 class ApiSettings:
     environment: str
@@ -32,6 +39,7 @@ class ApiSettings:
     sse_heartbeat_seconds: int
     sse_buffer_size: int
     approval_signing_key: str | None = None
+    exasol_required: bool = False
 
     @classmethod
     def from_env(cls, values: Mapping[str, str] | None = None) -> ApiSettings:
@@ -50,4 +58,5 @@ class ApiSettings:
             sse_heartbeat_seconds=_positive_int(source, "SSS_SSE_HEARTBEAT_SECONDS", 15),
             sse_buffer_size=_positive_int(source, "SSS_SSE_BUFFER_SIZE", 512),
             approval_signing_key=source.get("SSS_APPROVAL_SIGNING_KEY") or None,
+            exasol_required=_boolean(source, "SSS_EXASOL_REQUIRED", False),
         )
