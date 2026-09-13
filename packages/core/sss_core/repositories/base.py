@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from sss_core.demo import FixedDemoFixture
 from sss_core.domain import CandidateStatus
 from sss_core.repositories.exasol import RegistryEvidenceRecord
 
@@ -20,3 +21,9 @@ class RadarRepository(Protocol):
 
 class PolicyRepository(Protocol):
     def load_evidence(self, *, ecosystem: str, origin: str, name: str) -> dict[str, object]: ...
+
+
+class DemoRepository(Protocol):
+    def reset(self, fixture: FixedDemoFixture) -> None: ...
+
+    def replay_global_evidence(self, fixture: FixedDemoFixture) -> None: ...

@@ -26,13 +26,13 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["packages/core", "apps/worker"]
+pythonpath = [".", "packages/core", "apps/worker"]
 testpaths = ["tests"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-mypy_path = ["packages/core", "apps/worker"]
+mypy_path = [".", "packages/core", "apps/worker"]
 
 [tool.ruff]
 target-version = "py312"
