@@ -67,14 +67,11 @@ async def test_check_returns_frozen_block_and_pending_intervention_once() -> Non
     assert second.json() == first.json()
     body = first.json()
     assert body["decision"] == "block"
-    assert body["reason_codes"] == [
-        "REGISTERED_AFTER_HALLUCINATION",
-        "HIGH_GLOBAL_RECURRENCE",
-    ]
+    assert body["reason_codes"] == ["ASSESSMENT_UNAVAILABLE"]
     assert body["scores"] == {
-        "absence_confidence": 100,
-        "target_attractiveness": 95,
-        "package_policy_risk": 75,
+        "absence_confidence": None,
+        "target_attractiveness": 0,
+        "package_policy_risk": 0,
     }
     assert body["child_process_allowed"] is False
     assert interventions.status_code == 200

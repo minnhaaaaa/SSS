@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
 from sss_api.idempotency import require_idempotency_key
 from sss_api.schemas.guard import GuardCheckRequest, GuardCheckResponse
@@ -20,11 +20,15 @@ async def check(
     payload: GuardCheckRequest,
     request: Request,
     idempotency_key: str = Depends(require_idempotency_key),
+    approval_token: str | None = Header(default=None, alias="X-SSS-Approval"),
+    approval_nonce: str | None = Header(default=None, alias="X-SSS-Approval-Nonce"),
 ) -> GuardCheckResponse:
     try:
         assessment = await request.app.state.guard_service.check(
             payload.to_domain(),
             idempotency_key=idempotency_key,
+            approval_token=approval_token,
+            approval_nonce=approval_nonce,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc

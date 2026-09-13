@@ -75,6 +75,7 @@ class ApprovalService:
         token: str,
         request_id: str,
         expected_nonce: str,
+        request: InstallRequest | None = None,
         now: datetime | None = None,
     ) -> ApprovalGrant:
         current_time = datetime.now(UTC) if now is None else now
@@ -97,6 +98,8 @@ class ApprovalService:
             raise ApprovalError("approval nonce does not match")
         if current_time >= scope.expires_at:
             raise ApprovalError("approval has expired")
+        if request is not None and not scope.covers(request, now=current_time):
+            raise ApprovalError("approval does not exactly cover this install request")
         with self._lock:
             grant = self._by_token.get(token)
             if grant is None or grant.scope != scope:
