@@ -3,7 +3,6 @@ export type RuntimeValues = Readonly<Record<string, string | undefined>>;
 export interface RuntimeConfig {
   readonly apiBaseUrl: URL;
   readonly httpTimeoutMs: number;
-  readonly prototypeDataEnabled: boolean;
 }
 
 export class RuntimeConfigurationError extends Error {}
@@ -34,16 +33,7 @@ export function loadRuntimeConfig(values: RuntimeValues, applicationOrigin: stri
   return {
     apiBaseUrl: new URL(apiBaseUrl.toString().replace(/\/$/, "")),
     httpTimeoutMs,
-    prototypeDataEnabled: parseBoolean(values.VITE_SSS_USE_PROTOTYPE_DATA, false),
   };
-}
-
-function parseBoolean(value: string | undefined, fallback: boolean): boolean {
-  const normalized = value?.trim().toLocaleLowerCase();
-  if (!normalized) return fallback;
-  if (normalized === "true") return true;
-  if (normalized === "false") return false;
-  throw new RuntimeConfigurationError("VITE_SSS_USE_PROTOTYPE_DATA must be true or false");
 }
 
 function isHttpProtocol(protocol: string): boolean {

@@ -9,7 +9,7 @@ import {
 } from "react";
 
 import type { EventType } from "../api/events";
-import { api, dataMode, eventStream } from "./services";
+import { api, eventStream } from "./services";
 
 type ApiConnection = "checking" | "online" | "offline";
 type LiveConnection = "connecting" | "live" | "offline";
@@ -20,7 +20,6 @@ interface ControlRoomContextValue {
   readonly serviceName: string | null;
   readonly lastEventType: EventType | null;
   readonly liveRevision: number;
-  readonly dataMode: "live" | "prototype";
   readonly selectedPackage: string | null;
   readonly openPackage: (packageName: string) => void;
   readonly closePackage: () => void;
@@ -78,7 +77,6 @@ export function ControlRoomProvider({ children }: { readonly children: ReactNode
       serviceName,
       lastEventType,
       liveRevision,
-      dataMode,
       selectedPackage,
       openPackage: setSelectedPackage,
       closePackage: () => setSelectedPackage(null),

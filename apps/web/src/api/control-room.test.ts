@@ -87,13 +87,28 @@ describe("ControlRoomApi", () => {
     await expect(api.getOverview()).rejects.toBeInstanceOf(ApiContractError);
   });
 
-  it("does not simulate or expose demo mutations in live browser mode", async () => {
-    const fetchImplementation = vi.fn<typeof fetch>();
+  it("preserves unknown enforcement proof instead of converting it to false", async () => {
+    const fetchImplementation = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse([
+        {
+          id: "decision-1",
+          package_name: "runtime-package",
+          ecosystem: "npm",
+          result: "block",
+          policy: "sss-hackathon-v3",
+          occurred_at: "2026-09-13T10:00:00Z",
+          reason_codes: ["ASSESSMENT_UNAVAILABLE"],
+          package_manager_started: null,
+          package_code_executed: null,
+        },
+      ]),
+    );
     const api = new ControlRoomApi(new ApiClient(config, fetchImplementation));
 
-    await expect(api.runDemoAction("replay-evidence")).rejects.toThrow(
-      "Run the terminal-first demo from the operator shell",
-    );
-    expect(fetchImplementation).not.toHaveBeenCalled();
+    const decisions = await api.getDecisions();
+
+    expect(decisions[0]?.packageManagerStarted).toBeNull();
+    expect(decisions[0]?.packageCodeExecuted).toBeNull();
   });
+
 });

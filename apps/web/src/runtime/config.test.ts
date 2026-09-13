@@ -14,7 +14,6 @@ describe("loadRuntimeConfig", () => {
 
     expect(config.apiBaseUrl.toString()).toBe("https://api.example.test/");
     expect(config.httpTimeoutMs).toBe(2500);
-    expect(config.prototypeDataEnabled).toBe(false);
   });
 
   it("rejects credentials in a browser-visible URL", () => {
@@ -35,21 +34,4 @@ describe("loadRuntimeConfig", () => {
     ).toThrow(RuntimeConfigurationError);
   });
 
-  it("can explicitly switch from prototype fixtures to live backend data", () => {
-    const config = loadRuntimeConfig(
-      { VITE_SSS_USE_PROTOTYPE_DATA: "false" },
-      "https://application.example.test",
-    );
-
-    expect(config.prototypeDataEnabled).toBe(false);
-  });
-
-  it("rejects an ambiguous prototype data flag", () => {
-    expect(() =>
-      loadRuntimeConfig(
-        { VITE_SSS_USE_PROTOTYPE_DATA: "sometimes" },
-        "https://application.example.test",
-      ),
-    ).toThrow(RuntimeConfigurationError);
-  });
 });

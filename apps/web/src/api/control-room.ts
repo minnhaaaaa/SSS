@@ -5,9 +5,6 @@ import type {
   CoverageService,
   DecisionItem,
   DecisionResult,
-  DemoAction,
-  DemoState,
-  DemoStatus,
   Ecosystem,
   EvidenceItem,
   HealthData,
@@ -28,8 +25,6 @@ export interface ControlRoomService {
   getEvidence(name: string, signal?: AbortSignal): Promise<readonly EvidenceItem[]>;
   getDecisions(signal?: AbortSignal): Promise<readonly DecisionItem[]>;
   getCoverage(signal?: AbortSignal): Promise<CoverageData>;
-  getDemoStatus(signal?: AbortSignal): Promise<DemoStatus>;
-  runDemoAction(action: DemoAction, signal?: AbortSignal): Promise<DemoStatus>;
 }
 
 export class ControlRoomApi implements ControlRoomService {
@@ -74,15 +69,6 @@ export class ControlRoomApi implements ControlRoomService {
     return parseCoverage(await this.client.request<unknown>("/v1/public/coverage", withSignal(signal)));
   }
 
-  public async getDemoStatus(signal?: AbortSignal): Promise<DemoStatus> {
-    return parseDemoStatus(await this.client.request<unknown>("/v1/public/demo", withSignal(signal)));
-  }
-
-  public async runDemoAction(action: DemoAction, signal?: AbortSignal): Promise<DemoStatus> {
-    void action;
-    void signal;
-    throw new Error("Run the terminal-first demo from the operator shell");
-  }
 }
 
 function withSignal(signal: AbortSignal | undefined): { signal?: AbortSignal } {
@@ -164,8 +150,8 @@ function parseDecision(value: unknown): DecisionItem {
     reasonCodes: array(object, "reason_codes").map((item) =>
       primitiveString(item, "reason code"),
     ),
-    packageManagerStarted: boolean(object, "package_manager_started"),
-    packageCodeExecuted: boolean(object, "package_code_executed"),
+    packageManagerStarted: nullableBoolean(object, "package_manager_started"),
+    packageCodeExecuted: nullableBoolean(object, "package_code_executed"),
   };
 }
 
@@ -190,31 +176,6 @@ function parseCoverageService(value: unknown): CoverageService {
     name: string(object, "name"),
     state: enumValue(object, "state", SERVICE_STATES),
     detail: nullableString(object, "detail"),
-  };
-}
-
-function parseDemoStatus(value: unknown): DemoStatus {
-  const object = record(value, "demo status");
-  return {
-    state: enumValue(object, "state", DEMO_STATES),
-    completedSteps: array(object, "completed_steps").map((item) =>
-      primitiveEnum(item, "completed step", DEMO_ACTIONS),
-    ),
-    availableActions: array(object, "available_actions").map((item) =>
-      primitiveEnum(item, "available action", DEMO_ACTIONS),
-    ),
-    targetPackage: nullableString(object, "target_package"),
-    unprotectedCanaryCount: number(object, "unprotected_canary_count"),
-    protectedCanaryCount: number(object, "protected_canary_count"),
-    packageManagerStarted: nullableBoolean(object, "package_manager_started"),
-    message: nullableString(object, "message"),
-    scores: {
-      absenceConfidence: number(record(object.scores, "scores"), "absence_confidence"),
-      targetAttractiveness: number(record(object.scores, "scores"), "target_attractiveness"),
-      packagePolicyRisk: number(record(object.scores, "scores"), "package_policy_risk"),
-    },
-    policyVersion: string(object, "policy_version"),
-    registrationAgeMinutes: number(object, "registration_age_minutes"),
   };
 }
 
@@ -310,10 +271,3 @@ const PACKAGE_STATES: readonly PackageState[] = [
 ];
 const DECISION_RESULTS: readonly DecisionResult[] = ["allow", "review", "block"];
 const SERVICE_STATES: readonly ServiceState[] = ["operational", "degraded", "offline", "unknown"];
-const DEMO_STATES: readonly DemoState[] = ["ready", "running", "blocked", "failed"];
-const DEMO_ACTIONS: readonly DemoAction[] = [
-  "replay-evidence",
-  "register-target",
-  "run-unprotected",
-  "run-protected",
-];

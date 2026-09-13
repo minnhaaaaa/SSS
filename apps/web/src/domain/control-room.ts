@@ -53,8 +53,8 @@ export interface DecisionItem {
   readonly policy: string;
   readonly occurredAt: string;
   readonly reasonCodes: readonly string[];
-  readonly packageManagerStarted: boolean;
-  readonly packageCodeExecuted: boolean;
+  readonly packageManagerStarted: boolean | null;
+  readonly packageCodeExecuted: boolean | null;
 }
 
 export interface CoverageService {
@@ -73,31 +73,6 @@ export interface CoverageData {
   readonly verifiedRecommendations: number;
   readonly publicFailedReferences: number;
   readonly modelConfigurations: number;
-}
-
-export type DemoState = "ready" | "running" | "blocked" | "failed";
-export type DemoAction =
-  | "replay-evidence"
-  | "register-target"
-  | "run-unprotected"
-  | "run-protected";
-
-export interface DemoStatus {
-  readonly state: DemoState;
-  readonly completedSteps: readonly DemoAction[];
-  readonly availableActions: readonly DemoAction[];
-  readonly targetPackage: string | null;
-  readonly unprotectedCanaryCount: number;
-  readonly protectedCanaryCount: number;
-  readonly packageManagerStarted: boolean | null;
-  readonly message: string | null;
-  readonly scores: {
-    readonly absenceConfidence: number;
-    readonly targetAttractiveness: number;
-    readonly packagePolicyRisk: number;
-  };
-  readonly policyVersion: string;
-  readonly registrationAgeMinutes: number;
 }
 
 export interface HealthData {
