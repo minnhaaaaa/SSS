@@ -56,8 +56,8 @@ def test_schema_is_ready_only_with_all_checksums_and_views() -> None:
     result = checker.check(ReadinessConnection(_expected_rows(), _expected_views()))
 
     assert result.ready
-    assert result.current_version == "001_initial_evidence"
-    assert result.expected_version == "001_initial_evidence"
+    assert result.current_version == "002_operational_state"
+    assert result.expected_version == "002_operational_state"
     assert result.missing_migrations == ()
     assert result.checksum_mismatches == ()
     assert result.missing_views == ()
@@ -72,7 +72,7 @@ def test_schema_reports_checksum_drift_and_missing_views() -> None:
     result = checker.check(ReadinessConnection(rows, views))
 
     assert not result.ready
-    assert result.checksum_mismatches == ("001_initial_evidence",)
+    assert result.checksum_mismatches == ("002_operational_state",)
     assert result.missing_views == (_expected_views()[0],)
 
 

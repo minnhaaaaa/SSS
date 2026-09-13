@@ -1,16 +1,37 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Protocol
 from urllib.parse import quote
+from uuid import uuid4
 
 from sss_core.demo import FixedDemoFixture
-from sss_core.domain import CandidateStatus, PackageIdentity, RegistryStatus
+from sss_core.domain import (
+    CandidateStatus,
+    Decision,
+    Ecosystem,
+    EvidenceScores,
+    InstallRequest,
+    PackageIdentity,
+    PolicyDecision,
+    RegistryStatus,
+)
+from sss_core.repositories.operations import (
+    ApprovalNonceConflict,
+    IdempotencyClaim,
+    IdempotencyConflict,
+    InstallAttempt,
+    Intervention,
+    InterventionStatus,
+    OperationalEvent,
+)
 
 
 class ExasolResult(Protocol):
@@ -50,6 +71,23 @@ def _exasol_timestamp(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value
     return value.astimezone(UTC).replace(tzinfo=None)
+
+
+def _utc_timestamp(value: datetime | str) -> datetime:
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _json(value: object) -> str:
+    return json.dumps(value, separators=(",", ":"), sort_keys=True)
+
+
+def _affected_rows(result: object) -> int:
+    rowcount = getattr(result, "rowcount", 0)
+    return int(rowcount() if callable(rowcount) else rowcount)
 
 
 class MigrationRunner:
@@ -262,6 +300,476 @@ class ExasolPolicyRepository:
             "OBSERVATION_DAYS",
         )
         return dict(zip(columns, rows[0], strict=True))
+
+
+def _request_payload(request: InstallRequest) -> dict[str, object]:
+    return {
+        "request_id": request.request_id,
+        "project_id": request.project_id,
+        "agent_family": request.agent_family,
+        "package": {
+            "ecosystem": request.package.ecosystem.value,
+            "registry_origin": request.package.registry_origin,
+            "canonical_name": request.package.canonical_name,
+        },
+        "version_spec": request.version_spec,
+        "direct_url": request.direct_url,
+        "artifact_sha256": request.artifact_sha256,
+        "is_direct": request.is_direct,
+    }
+
+
+def _decision_payload(decision: PolicyDecision) -> dict[str, object]:
+    return {
+        "decision_id": decision.decision_id,
+        "request_id": decision.request_id,
+        "decision": decision.decision.value,
+        "reason_codes": list(decision.reason_codes),
+        "scores": {
+            "absence_confidence": decision.scores.absence_confidence,
+            "target_attractiveness": decision.scores.target_attractiveness,
+            "package_policy_risk": decision.scores.package_policy_risk,
+        },
+        "policy_version": decision.policy_version,
+        "expires_at": decision.expires_at.isoformat() if decision.expires_at else None,
+    }
+
+
+def _request_from_json(document: str) -> InstallRequest:
+    payload = json.loads(document)
+    package = payload["package"]
+    return InstallRequest(
+        request_id=str(payload["request_id"]),
+        project_id=str(payload["project_id"]),
+        agent_family=str(payload["agent_family"]),
+        package=PackageIdentity(
+            ecosystem=Ecosystem(str(package["ecosystem"])),
+            registry_origin=str(package["registry_origin"]),
+            canonical_name=str(package["canonical_name"]),
+        ),
+        version_spec=payload["version_spec"],
+        direct_url=payload["direct_url"],
+        artifact_sha256=payload["artifact_sha256"],
+        is_direct=bool(payload["is_direct"]),
+    )
+
+
+def _decision_from_json(document: str) -> PolicyDecision:
+    payload = json.loads(document)
+    scores = payload["scores"]
+    expires_at = payload["expires_at"]
+    return PolicyDecision(
+        decision_id=str(payload["decision_id"]),
+        request_id=str(payload["request_id"]),
+        decision=Decision(str(payload["decision"])),
+        reason_codes=tuple(str(code) for code in payload["reason_codes"]),
+        scores=EvidenceScores(
+            absence_confidence=(
+                None
+                if scores["absence_confidence"] is None
+                else int(scores["absence_confidence"])
+            ),
+            target_attractiveness=int(scores["target_attractiveness"]),
+            package_policy_risk=int(scores["package_policy_risk"]),
+        ),
+        policy_version=str(payload["policy_version"]),
+        expires_at=datetime.fromisoformat(str(expires_at)) if expires_at is not None else None,
+    )
+
+
+def _validate_limit(limit: int) -> None:
+    if not 1 <= limit <= 1000:
+        raise ValueError("limit must be between 1 and 1000")
+
+
+class ExasolOperationalRepository:
+    """Transactional Exasol persistence for Guard operational state."""
+
+    def __init__(self, connection: ExasolConnection) -> None:
+        self._connection = connection
+
+    def record_decision(
+        self,
+        request: InstallRequest,
+        decision: PolicyDecision,
+        *,
+        evidence_as_of: datetime,
+        evidence_attestation: str,
+    ) -> None:
+        parameters = {
+            "decision_id": decision.decision_id,
+            "request_id": decision.request_id,
+            "ecosystem": request.package.ecosystem.value,
+            "registry_origin": request.package.registry_origin,
+            "canonical_name": request.package.canonical_name,
+            "absence_confidence": decision.scores.absence_confidence,
+            "target_attractiveness": decision.scores.target_attractiveness,
+            "package_policy_risk": decision.scores.package_policy_risk,
+            "decision": decision.decision.value,
+            "reason_codes_json": _json(list(decision.reason_codes)),
+            "policy_version": decision.policy_version,
+            "decided_at": _exasol_timestamp(evidence_as_of),
+            "request_json": _json(_request_payload(request)),
+            "evidence_as_of": _exasol_timestamp(evidence_as_of),
+            "evidence_attestation": evidence_attestation,
+        }
+        try:
+            self._connection.execute(
+                "INSERT INTO POLICY_DECISIONS (DECISION_ID, REQUEST_ID, ECOSYSTEM, "
+                "REGISTRY_ORIGIN, CANONICAL_NAME, ABSENCE_CONFIDENCE, TARGET_ATTRACTIVENESS, "
+                "PACKAGE_POLICY_RISK, DECISION, REASON_CODES_JSON, POLICY_VERSION, DECIDED_AT, "
+                "REQUEST_JSON, EVIDENCE_AS_OF, EVIDENCE_ATTESTATION) VALUES ({decision_id}, "
+                "{request_id}, {ecosystem}, {registry_origin}, {canonical_name}, "
+                "{absence_confidence}, {target_attractiveness}, {package_policy_risk}, "
+                "{decision}, {reason_codes_json}, {policy_version}, {decided_at}, "
+                "{request_json}, {evidence_as_of}, {evidence_attestation})",
+                parameters,
+            )
+            self._connection.commit()
+        except Exception:
+            self._connection.rollback()
+            raise
+
+    def record_attempt(
+        self, attempt: InstallAttempt, *, attempt_id: str | None = None
+    ) -> InstallAttempt:
+        canonical_attempt = _json(
+            {
+                "decision_id": attempt.decision_id,
+                "manager": attempt.manager,
+                "arguments": list(attempt.arguments),
+                "agent_family": attempt.agent_family,
+                "project_id": attempt.project_id,
+                "decision": attempt.decision.value,
+                "child_started": attempt.child_started,
+                "attempted_at": _exasol_timestamp(attempt.attempted_at).isoformat(),
+            }
+        )
+        parameters = {
+            "attempt_id": attempt_id or hashlib.sha256(canonical_attempt.encode()).hexdigest(),
+            "decision_id": attempt.decision_id,
+            "command_sha256": hashlib.sha256(
+                _json([attempt.manager, *attempt.arguments]).encode()
+            ).hexdigest(),
+            "manager": attempt.manager,
+            "arguments_json": _json(list(attempt.arguments)),
+            "agent_family": attempt.agent_family,
+            "project_id": attempt.project_id,
+            "decision": attempt.decision.value,
+            "child_started": attempt.child_started,
+            "attempted_at": _exasol_timestamp(attempt.attempted_at),
+        }
+        try:
+            self._connection.execute(
+                "INSERT INTO INSTALL_ATTEMPTS (ATTEMPT_ID, DECISION_ID, COMMAND_SHA256, "
+                "MANAGER, ARGUMENTS_JSON, AGENT_FAMILY, PROJECT_PSEUDONYM, DECISION, "
+                "CHILD_STARTED, ATTEMPTED_AT) VALUES ({attempt_id}, {decision_id}, "
+                "{command_sha256}, {manager}, {arguments_json}, {agent_family}, {project_id}, "
+                "{decision}, {child_started}, {attempted_at})",
+                parameters,
+            )
+            self._connection.commit()
+        except Exception:
+            self._connection.rollback()
+            raise
+        return attempt
+
+    @staticmethod
+    def _attempt(row: Sequence[Any]) -> InstallAttempt:
+        return InstallAttempt(
+            decision_id=str(row[1]),
+            manager=str(row[2]),
+            arguments=tuple(str(value) for value in json.loads(str(row[3]))),
+            agent_family=str(row[4]),
+            project_id=str(row[5]),
+            decision=Decision(str(row[6])),
+            child_started=bool(row[7]),
+            attempted_at=_utc_timestamp(row[8]),
+        )
+
+    def get_attempt(self, attempt_id: str) -> InstallAttempt | None:
+        rows = _rows(
+            self._connection.execute(
+                "SELECT ATTEMPT_ID, DECISION_ID, MANAGER, ARGUMENTS_JSON, AGENT_FAMILY, "
+                "PROJECT_PSEUDONYM, DECISION, CHILD_STARTED, ATTEMPTED_AT FROM "
+                "INSTALL_ATTEMPTS WHERE ATTEMPT_ID={attempt_id}",
+                {"attempt_id": attempt_id},
+            )
+        )
+        return None if not rows else self._attempt(rows[0])
+
+    def list_attempts(self, *, limit: int = 100) -> tuple[InstallAttempt, ...]:
+        _validate_limit(limit)
+        rows = _rows(
+            self._connection.execute(
+                "SELECT ATTEMPT_ID, DECISION_ID, MANAGER, ARGUMENTS_JSON, AGENT_FAMILY, "
+                "PROJECT_PSEUDONYM, DECISION, CHILD_STARTED, ATTEMPTED_AT FROM "
+                "INSTALL_ATTEMPTS ORDER BY ATTEMPTED_AT DESC, ATTEMPT_ID DESC LIMIT {limit!d}",
+                {"limit": limit},
+            )
+        )
+        return tuple(self._attempt(row) for row in rows)
+
+    def create_intervention(self, intervention: Intervention) -> Intervention:
+        parameters = {
+            "intervention_id": intervention.intervention_id,
+            "decision_id": intervention.decision.decision_id,
+            "request_json": _json(_request_payload(intervention.request)),
+            "decision_json": _json(_decision_payload(intervention.decision)),
+            "evidence_labels_json": _json(list(intervention.evidence_labels)),
+            "status": intervention.status.value,
+            "created_at": _exasol_timestamp(intervention.created_at),
+            "approval_id": intervention.approval_id,
+        }
+        try:
+            self._connection.execute(
+                "INSERT INTO INTERVENTIONS (INTERVENTION_ID, DECISION_ID, REQUEST_JSON, "
+                "DECISION_JSON, EVIDENCE_LABELS_JSON, STATUS, CREATED_AT, APPROVAL_ID) VALUES "
+                "({intervention_id}, {decision_id}, {request_json}, {decision_json}, "
+                "{evidence_labels_json}, {status}, {created_at}, {approval_id})",
+                parameters,
+            )
+            self._connection.commit()
+        except Exception:
+            self._connection.rollback()
+            raise
+        return intervention
+
+    @staticmethod
+    def _intervention(row: Sequence[Any]) -> Intervention:
+        return Intervention(
+            intervention_id=str(row[0]),
+            request=_request_from_json(str(row[1])),
+            decision=_decision_from_json(str(row[2])),
+            evidence_labels=tuple(str(label) for label in json.loads(str(row[3]))),
+            status=InterventionStatus(str(row[4])),
+            created_at=_utc_timestamp(row[5]),
+            approval_id=None if row[6] is None else str(row[6]),
+        )
+
+    def list_interventions(
+        self, *, pending_only: bool = False, limit: int = 100
+    ) -> tuple[Intervention, ...]:
+        _validate_limit(limit)
+        if pending_only:
+            sql = (
+                "SELECT INTERVENTION_ID, REQUEST_JSON, DECISION_JSON, EVIDENCE_LABELS_JSON, "
+                "STATUS, CREATED_AT, APPROVAL_ID FROM INTERVENTIONS "
+                "WHERE STATUS={pending_status} ORDER BY CREATED_AT DESC, "
+                "INTERVENTION_ID DESC LIMIT {limit!d}"
+            )
+            parameters: dict[str, object] = {
+                "limit": limit,
+                "pending_status": InterventionStatus.PENDING.value,
+            }
+        else:
+            sql = (
+                "SELECT INTERVENTION_ID, REQUEST_JSON, DECISION_JSON, EVIDENCE_LABELS_JSON, "
+                "STATUS, CREATED_AT, APPROVAL_ID FROM INTERVENTIONS "
+                "ORDER BY CREATED_AT DESC, INTERVENTION_ID DESC LIMIT {limit!d}"
+            )
+            parameters = {"limit": limit}
+        rows = _rows(
+            self._connection.execute(sql, parameters)
+        )
+        return tuple(self._intervention(row) for row in rows)
+
+    def get_intervention(self, intervention_id: str) -> Intervention:
+        rows = _rows(
+            self._connection.execute(
+                "SELECT INTERVENTION_ID, REQUEST_JSON, DECISION_JSON, EVIDENCE_LABELS_JSON, "
+                "STATUS, CREATED_AT, APPROVAL_ID FROM INTERVENTIONS "
+                "WHERE INTERVENTION_ID={intervention_id}",
+                {"intervention_id": intervention_id},
+            )
+        )
+        if not rows:
+            raise KeyError("intervention not found")
+        return self._intervention(rows[0])
+
+    def resolve_intervention(
+        self,
+        intervention_id: str,
+        status: InterventionStatus,
+        *,
+        approval_id: str | None = None,
+        resolved_at: datetime,
+    ) -> Intervention:
+        if status is InterventionStatus.PENDING:
+            raise ValueError("resolved intervention cannot be pending")
+        parameters = {
+            "intervention_id": intervention_id,
+            "status": status.value,
+            "approval_id": approval_id,
+            "resolved_at": _exasol_timestamp(resolved_at),
+            "pending_status": InterventionStatus.PENDING.value,
+        }
+        try:
+            result = self._connection.execute(
+                "UPDATE INTERVENTIONS SET STATUS={status}, APPROVAL_ID={approval_id}, "
+                "RESOLVED_AT={resolved_at} WHERE INTERVENTION_ID={intervention_id} "
+                "AND STATUS={pending_status}",
+                parameters,
+            )
+            if _affected_rows(result) != 1:
+                raise KeyError("pending intervention not found")
+            self._connection.commit()
+        except Exception:
+            self._connection.rollback()
+            raise
+        return self.get_intervention(intervention_id)
+
+    def get_idempotency(self, idempotency_key: str) -> IdempotencyClaim | None:
+        rows = _rows(
+            self._connection.execute(
+                "SELECT REQUEST_HASH, RESPONSE_REFERENCE, CREATED_AT FROM IDEMPOTENCY_CLAIMS "
+                "WHERE IDEMPOTENCY_KEY={idempotency_key}",
+                {"idempotency_key": idempotency_key},
+            )
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        return IdempotencyClaim(
+            idempotency_key=idempotency_key,
+            request_hash=str(row[0]),
+            response_reference=str(row[1]),
+            created_at=_utc_timestamp(row[2]),
+        )
+
+    def claim_idempotency(
+        self, idempotency_key: str, request_hash: str, response_reference: str
+    ) -> IdempotencyClaim:
+        existing = self.get_idempotency(idempotency_key)
+        if existing is not None:
+            if existing.request_hash != request_hash:
+                self._connection.rollback()
+                raise IdempotencyConflict("idempotency key was already used for another request")
+            self._connection.commit()
+            return existing
+        created_at = datetime.now(UTC)
+        parameters = {
+            "idempotency_key": idempotency_key,
+            "request_hash": request_hash,
+            "response_reference": response_reference,
+            "created_at": _exasol_timestamp(created_at),
+        }
+        try:
+            self._connection.execute(
+                "INSERT INTO IDEMPOTENCY_CLAIMS (IDEMPOTENCY_KEY, REQUEST_HASH, "
+                "RESPONSE_REFERENCE, CREATED_AT) VALUES ({idempotency_key}, {request_hash}, "
+                "{response_reference}, {created_at})",
+                parameters,
+            )
+            self._connection.commit()
+        except Exception:
+            self._connection.rollback()
+            raced = self.get_idempotency(idempotency_key)
+            if raced is not None:
+                if raced.request_hash != request_hash:
+                    raise IdempotencyConflict(
+                        "idempotency key was already used for another request"
+                    ) from None
+                return raced
+            raise
+        return IdempotencyClaim(
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+            response_reference=response_reference,
+            created_at=created_at,
+        )
+
+    def consume_approval_nonce(
+        self,
+        approval_id: str,
+        nonce: str,
+        request_id: str,
+        *,
+        consumed_at: datetime,
+        metadata: Mapping[str, Any],
+    ) -> None:
+        parameters = {
+            "approval_id": approval_id,
+            "nonce": nonce,
+            "request_id": request_id,
+            "consumed_at": _exasol_timestamp(consumed_at),
+            "metadata_json": _json(dict(metadata)),
+        }
+        try:
+            result = self._connection.execute(
+                "UPDATE APPROVAL_GRANTS SET CONSUMED_AT={consumed_at}, "
+                "CONSUMED_REQUEST_ID={request_id}, "
+                "CONSUMPTION_METADATA_JSON={metadata_json} WHERE APPROVAL_ID={approval_id} "
+                "AND NONCE={nonce} AND CONSUMED_AT IS NULL",
+                parameters,
+            )
+            if _affected_rows(result) != 1:
+                raise ApprovalNonceConflict("approval nonce is invalid or already consumed")
+            self._connection.commit()
+        except Exception:
+            self._connection.rollback()
+            raise
+
+    def append_event(
+        self,
+        event_type: str,
+        payload: Mapping[str, Any],
+        *,
+        occurred_at: datetime,
+    ) -> OperationalEvent:
+        event_key = uuid4().hex
+        try:
+            parameters = {
+                "event_key": event_key,
+                "event_type": event_type,
+                "payload_json": _json(dict(payload)),
+                "occurred_at": _exasol_timestamp(occurred_at),
+            }
+            self._connection.execute(
+                "INSERT INTO EVENT_LOG (EVENT_KEY, EVENT_TYPE, PAYLOAD_JSON, OCCURRED_AT) "
+                "VALUES ({event_key}, {event_type}, {payload_json}, {occurred_at})",
+                parameters,
+            )
+            event_rows = _rows(
+                self._connection.execute(
+                    "SELECT EVENT_ID FROM EVENT_LOG WHERE EVENT_KEY={event_key}",
+                    {"event_key": event_key},
+                )
+            )
+            if not event_rows:
+                raise RuntimeError("persisted event identity was not returned")
+            event_id = int(event_rows[0][0])
+            self._connection.commit()
+        except Exception:
+            self._connection.rollback()
+            raise
+        return OperationalEvent(
+            event_id=event_id,
+            event_type=event_type,
+            payload=MappingProxyType(dict(payload)),
+            occurred_at=_utc_timestamp(occurred_at),
+        )
+
+    def events_after(
+        self, *, after_id: int = 0, limit: int = 100
+    ) -> tuple[OperationalEvent, ...]:
+        _validate_limit(limit)
+        rows = _rows(
+            self._connection.execute(
+                "SELECT EVENT_ID, EVENT_TYPE, PAYLOAD_JSON, OCCURRED_AT FROM EVENT_LOG "
+                "WHERE EVENT_ID>{after_id} ORDER BY EVENT_ID ASC LIMIT {limit!d}",
+                {"after_id": max(after_id, 0), "limit": limit},
+            )
+        )
+        return tuple(
+            OperationalEvent(
+                event_id=int(row[0]),
+                event_type=str(row[1]),
+                payload=MappingProxyType(dict(json.loads(str(row[2])))),
+                occurred_at=_utc_timestamp(row[3]),
+            )
+            for row in rows
+        )
 
 
 class ExasolDemoRepository:

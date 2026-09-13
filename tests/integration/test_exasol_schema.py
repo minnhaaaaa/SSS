@@ -47,7 +47,7 @@ def test_migrating_an_empty_schema_twice_is_a_noop() -> None:
     ddl_after_first = connection.ddl_count
     second = runner.migrate(connection)
 
-    assert first == ("001_initial_evidence",)
+    assert first == ("001_initial_evidence", "002_operational_state")
     assert connection.view_count == 10
     assert second == ()
     assert connection.ddl_count == ddl_after_first

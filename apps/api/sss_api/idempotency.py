@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
+from typing import Any
 
 from fastapi import Header, HTTPException, Request, status
 
 _SAFE_KEY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+
+
+def idempotency_request_hash(payload: Any) -> str:
+    canonical = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def validate_idempotency_key(value: str, *, max_bytes: int) -> str:
