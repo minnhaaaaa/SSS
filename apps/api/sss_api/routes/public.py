@@ -1,4 +1,4 @@
-"""Read-only, synthetic-only browser view of the local demonstration."""
+"""Read-only browser views backed by persisted or current runtime evidence."""
 
 from __future__ import annotations
 
@@ -10,230 +10,53 @@ from typing import Any, cast
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-from sss_core.demo import FixedDemoFixture
+from starlette.concurrency import run_in_threadpool
 
 from sss_api.events import ServerEvent
-from sss_api.services.demo import DemoState, DemoStatus
 
-router = APIRouter(prefix="/v1/public", tags=["public-demo"])
-
-
-def _fixture(request: Request) -> FixedDemoFixture:
-    return cast(FixedDemoFixture, request.app.state.demo_fixture)
-
-
-def _effective_status(request: Request) -> DemoStatus:
-    current = cast(DemoStatus, request.app.state.demo_controller.status())
-    if (
-        current.state is DemoState.READY
-        and request.app.state.install_attempt_store.list_all()
-    ):
-        return DemoStatus(
-            state=DemoState.PROTECTED_BLOCKED,
-            canary_count=current.canary_count,
-            protected_child_started=False,
-            protected_exit_code=23,
-        )
-    return current
-
-
-def _package(fixture: FixedDemoFixture, state: DemoState) -> dict[str, Any]:
-    package_state = {
-        DemoState.READY: "absent",
-        DemoState.REPLAYED: "absent",
-        DemoState.REGISTERED: "high_risk",
-        DemoState.UNPROTECTED: "high_risk",
-        DemoState.PROTECTED_BLOCKED: "blocked",
-    }[state]
-    return {
-        "id": "pkg-demo-reserved-synthetic",
-        "name": fixture.package.canonical_name,
-        "ecosystem": fixture.package.ecosystem.value,
-        "state": package_state,
-        "attractiveness": fixture.scores.target_attractiveness,
-        "policy_risk": fixture.scores.package_policy_risk,
-        "last_seen": fixture.attack_at.isoformat(),
-    }
-
-
-def _demo_view(value: DemoStatus, fixture: FixedDemoFixture) -> dict[str, Any]:
-    completed = {
-        DemoState.READY: [],
-        DemoState.REPLAYED: ["replay-evidence"],
-        DemoState.REGISTERED: ["replay-evidence", "register-target"],
-        DemoState.UNPROTECTED: [
-            "replay-evidence",
-            "register-target",
-            "run-unprotected",
-        ],
-        DemoState.PROTECTED_BLOCKED: [
-            "replay-evidence",
-            "register-target",
-            "run-unprotected",
-            "run-protected",
-        ],
-    }[value.state]
-    view_state = "blocked" if value.state is DemoState.PROTECTED_BLOCKED else (
-        "ready" if value.state is DemoState.READY else "running"
-    )
-    messages = {
-        DemoState.READY: "Terminal-first agent demonstration is ready to run.",
-        DemoState.REPLAYED: (
-            "Synthetic Exasol evidence replayed; register the controlled target next."
-        ),
-        DemoState.REGISTERED: "Controlled target registered on the same logical npm origin.",
-        DemoState.UNPROTECTED: "Unprotected baseline reached the isolated canary once.",
-        DemoState.PROTECTED_BLOCKED: (
-            "Agent install blocked before pnpm; review it with `sss intervene --watch`."
-        ),
-    }
-    return {
-        "state": view_state,
-        "completed_steps": completed,
-        "available_actions": [],
-        "target_package": fixture.package.canonical_name,
-        "unprotected_canary_count": value.canary_count,
-        "protected_canary_count": 0,
-        "package_manager_started": value.protected_child_started,
-        "message": messages[value.state],
-        "scores": {
-            "absence_confidence": fixture.scores.absence_confidence,
-            "target_attractiveness": fixture.scores.target_attractiveness,
-            "package_policy_risk": fixture.scores.package_policy_risk,
-        },
-        "policy_version": fixture.policy_version,
-        "registration_age_minutes": fixture.registration_age_minutes,
-    }
+router = APIRouter(prefix="/v1/public", tags=["public"])
 
 
 @router.get("/overview")
 async def overview(request: Request) -> dict[str, Any]:
-    fixture = _fixture(request)
-    current = _effective_status(request)
-    package = _package(fixture, current.state)
-    activity = []
-    if current.state is DemoState.PROTECTED_BLOCKED:
-        activity.append(
-            {
-                "id": "activity-protected-block",
-                "kind": "blocked",
-                "label": "Agent install stopped before pnpm",
-                "package_name": fixture.package.canonical_name,
-                "occurred_at": fixture.attack_at.isoformat(),
-            }
-        )
-    return {
-        "data_as_of": fixture.attack_at.isoformat(),
-        "guard_status": "operational",
-        "active_threats": 1 if current.state is not DemoState.READY else 0,
-        "protected_agents": fixture.protected_agent_attempts,
-        "verified_recommendations": fixture.verified_model_recommendations,
-        "radar_nodes": [package],
-        "prioritized_targets": [package],
-        "recent_activity": activity,
-    }
+    service = request.app.state.control_room_service
+    return cast(dict[str, Any], await run_in_threadpool(service.overview))
 
 
 @router.get("/packages")
 async def packages(request: Request) -> list[dict[str, Any]]:
-    return [_package(_fixture(request), _effective_status(request).state)]
+    service = request.app.state.control_room_service
+    return cast(list[dict[str, Any]], await run_in_threadpool(service.packages))
 
 
 @router.get("/packages/{name:path}")
 async def package_detail(name: str, request: Request) -> dict[str, Any]:
-    fixture = _fixture(request)
-    if name != fixture.package.canonical_name:
+    service = request.app.state.control_room_service
+    found = await run_in_threadpool(service.package, name)
+    if found is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="package not found")
-    package = _package(fixture, _effective_status(request).state)
-    return {
-        **package,
-        "absence_confidence": fixture.scores.absence_confidence,
-        "lifecycle": [
-            "46 verified recommendations observed",
-            "Public registry absence verified",
-            "Registration detected on the same origin",
-            "Agent installation blocked before pnpm",
-        ],
-    }
+    return cast(dict[str, Any], found)
 
 
 @router.get("/evidence/{name:path}")
 async def evidence(name: str, request: Request) -> list[dict[str, Any]]:
-    fixture = _fixture(request)
-    if name != fixture.package.canonical_name:
+    service = request.app.state.control_room_service
+    found = await run_in_threadpool(service.package, name)
+    if found is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="package not found")
-    return [
-        {
-            "id": "evidence-absence",
-            "type": "registry",
-            "label": "npm absence verified",
-            "provenance": "synthetic registry observation",
-            "occurred_at": fixture.first_absence_at.isoformat(),
-        },
-        {
-            "id": "evidence-registration",
-            "type": "registration",
-            "label": "Same-origin registration detected",
-            "provenance": "synthetic registry observation",
-            "occurred_at": fixture.registered_at.isoformat(),
-        },
-    ]
+    return cast(list[dict[str, Any]], await run_in_threadpool(service.evidence, name))
 
 
 @router.get("/decisions")
 async def decisions(request: Request) -> list[dict[str, Any]]:
-    fixture = _fixture(request)
-    return [
-        {
-            "id": attempt.decision_id,
-            "package_name": fixture.package.canonical_name,
-            "ecosystem": fixture.package.ecosystem.value,
-            "result": attempt.decision.value,
-            "policy": fixture.policy_version,
-            "occurred_at": attempt.attempted_at.isoformat(),
-            "reason_codes": [
-                "REGISTERED_AFTER_HALLUCINATION",
-                "HIGH_GLOBAL_RECURRENCE",
-            ],
-            "package_manager_started": attempt.child_started,
-            "package_code_executed": False,
-        }
-        for attempt in request.app.state.install_attempt_store.list_all()
-    ]
+    service = request.app.state.control_room_service
+    return cast(list[dict[str, Any]], await run_in_threadpool(service.decisions))
 
 
 @router.get("/coverage")
 async def coverage(request: Request) -> dict[str, Any]:
-    fixture = _fixture(request)
-    return {
-        "data_as_of": fixture.attack_at.isoformat(),
-        "registries": [
-            {
-                "id": "registry-npm-demo",
-                "name": "Controlled npm",
-                "state": "operational",
-                "detail": "TLS same-origin registry",
-            }
-        ],
-        "services": [
-            {
-                "id": "service-guard",
-                "name": "SSS Guard",
-                "state": "operational",
-                "detail": "Strict policy loaded from Exasol-backed evidence",
-            }
-        ],
-        "protected_agents": fixture.protected_agent_attempts,
-        "observation_days": fixture.observation_days,
-        "verified_recommendations": fixture.verified_model_recommendations,
-        "public_failed_references": fixture.public_failed_references,
-        "model_configurations": fixture.model_configurations,
-    }
-
-
-@router.get("/demo")
-async def demo(request: Request) -> dict[str, Any]:
-    return _demo_view(_effective_status(request), _fixture(request))
+    service = request.app.state.control_room_service
+    return cast(dict[str, Any], await run_in_threadpool(service.coverage))
 
 
 @router.get("/events")
