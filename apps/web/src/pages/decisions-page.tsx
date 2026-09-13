@@ -1,5 +1,5 @@
-import { Check, ShieldAlert, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Check, Gavel, ShieldAlert, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useControlRoom } from "../app/control-room-context";
 import { api } from "../app/services";
@@ -19,11 +19,16 @@ export function DecisionsPage() {
     [resource.data, selectedId],
   );
 
+  useEffect(() => {
+    if (!selectedId && resource.data?.[0]) setSelectedId(resource.data[0].id);
+  }, [resource.data, selectedId]);
+
   return (
     <PageFrame
       eyebrow="Guard / Audit"
       title="Guard Decisions"
       description="Deterministic enforcement decisions and the conditions behind them."
+      meta={<span className="page-symbol"><Gavel size={20} aria-hidden="true" /> Policy ledger</span>}
     >
       {resource.loading && <LoadingState />}
       {resource.error && <ErrorState error={resource.error} retry={resource.reload} />}

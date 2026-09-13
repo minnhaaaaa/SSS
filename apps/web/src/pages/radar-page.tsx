@@ -22,6 +22,7 @@ export function RadarPage() {
           <OverviewRadar
             nodes={resource.data.radarNodes}
             showStateLegend
+            initialZoom={1.1}
             onSelectPackage={openPackage}
           />
         </section>

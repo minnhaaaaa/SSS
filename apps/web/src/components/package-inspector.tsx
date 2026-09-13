@@ -1,4 +1,4 @@
-import { Clock3, ShieldX, X } from "lucide-react";
+import { Activity, Clock3, ShieldCheck, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useControlRoom } from "../app/control-room-context";
@@ -98,10 +98,7 @@ export function PackageInspector() {
       />
       <aside className="package-inspector" role="dialog" aria-modal="true" aria-label="Package Inspector">
         <header className="package-inspector__header">
-          <div>
-            <p className="eyebrow">Package inspector</p>
-            <h2>{selectedPackage ?? "Package"}</h2>
-          </div>
+          <h2>Package Inspector</h2>
           <button ref={closeButton} className="icon-button" type="button" onClick={closePackage}>
             <X aria-hidden="true" />
             <span className="sr-only">Close inspector</span>
@@ -114,31 +111,31 @@ export function PackageInspector() {
           {!loading && !error && detail && (
             <>
               <div className="package-identity">
-                <div>
-                  <span className={`state-chip state-chip--${detail.state}`}>
-                    {titleCase(detail.state)}
-                  </span>
-                  <span className="registry-chip">{detail.ecosystem}</span>
-                </div>
-                <p>High-risk temporal patterns require evidence review, not unsupported attribution.</p>
+                <p><span>{detail.ecosystem}:</span> {detail.name}</p>
+                <span className={`state-chip state-chip--${detail.state}`}>
+                  {titleCase(detail.state)}
+                </span>
               </div>
 
               <div className="score-grid">
-                <ScoreBlock label="Target attractiveness" value={score(detail.attractiveness)} />
-                <ScoreBlock label="Absence confidence" value={score(detail.absenceConfidence)} />
+                <ScoreBlock label="Attractiveness" value={score(detail.attractiveness)} />
                 <ScoreBlock label="Policy risk" value={score(detail.policyRisk)} />
+                <ScoreBlock label="Absence confidence" value={score(detail.absenceConfidence)} />
               </div>
 
               <section className="inspector-section">
                 <div className="section-label">
-                  <ShieldX size={16} aria-hidden="true" /> Package lifecycle
+                  <ShieldCheck size={16} aria-hidden="true" /> Lifecycle
                 </div>
                 {detail.lifecycle.length ? (
                   <ol className="lifecycle-list">
                     {detail.lifecycle.map((step, index) => (
                       <li key={`${step}-${index}`}>
-                        <span>{String(index + 1).padStart(2, "0")}</span>
-                        {step}
+                        <span className={lifecycleTone(step)} aria-hidden="true" />
+                        <div>
+                          <strong>{step}</strong>
+                          <small>Stage {String(index + 1).padStart(2, "0")}</small>
+                        </div>
                       </li>
                     ))}
                   </ol>
@@ -149,15 +146,18 @@ export function PackageInspector() {
 
               <section className="inspector-section">
                 <div className="section-label">
-                  <Clock3 size={16} aria-hidden="true" /> Evidence timeline
+                  <Activity size={16} aria-hidden="true" /> Recent Activity
                 </div>
                 {evidence.length ? (
                   <ol className="evidence-list">
                     {evidence.map((item) => (
                       <li key={item.id}>
-                        <time dateTime={item.occurredAt}>{formatTimestamp(item.occurredAt)}</time>
-                        <strong>{item.label}</strong>
-                        <span>{item.provenance}</span>
+                        <span className={`evidence-list__dot evidence-list__dot--${item.type}`} aria-hidden="true" />
+                        <div>
+                          <strong>{item.label}</strong>
+                          <span>{item.provenance}</span>
+                        </div>
+                        <time dateTime={item.occurredAt}><Clock3 size={12} aria-hidden="true" /> {formatTimestamp(item.occurredAt)}</time>
                       </li>
                     ))}
                   </ol>
@@ -178,7 +178,15 @@ function ScoreBlock({ label, value }: { readonly label: string; readonly value: 
     <div className="score-block">
       <span>{label}</span>
       <strong>{value}</strong>
-      <small>/ 100</small>
+      <small>{value === "—" ? "not scored" : "/ 100"}</small>
     </div>
   );
+}
+
+function lifecycleTone(step: string): string {
+  const normalized = step.toLocaleLowerCase();
+  if (normalized.includes("blocked") || normalized.includes("risk")) return "is-danger";
+  if (normalized.includes("registration") || normalized.includes("registry transition")) return "is-warning";
+  if (normalized.includes("monitored") || normalized.includes("recommendation")) return "is-cyan";
+  return "is-neutral";
 }
