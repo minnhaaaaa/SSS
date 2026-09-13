@@ -735,18 +735,28 @@ git commit -m "feat: ship recoverable self-hosted production profile"
 - Modify: `scripts/validate_local.sh`
 - Create: `scripts/validate_production.sh`
 - Modify: `PLAN.md`
+- Modify: `README.md`
 - Modify: `docs/contracts/CHANGELOG.md`
+- Create: `docs/pitch/SSS-pitch-deck.pptx`
+- Create: `docs/pitch/SSS-pitch-deck.pdf`
+- Create: `docs/pitch/README.md`
+- Create: `docs/demo-video-script.md`
+- Create: `scripts/build_pitch_deck.mjs`
 - Create: `CHANGELOG.md`
 
 **Interfaces:**
 - Produces: a reproducible release gate and integrated `main` branch.
 - Consumes: all tasks and every active remote branch.
 
-- [ ] **Step 1: Add the complete validation driver**
+- [ ] **Step 1: Complete the submission package**
+
+Rewrite the root README as the submission entry point with the problem, solution, architecture, supported agent/package-manager integrations, zero-cost local demo setup, production self-hosted deployment, usage, validation, security boundary, pitch-deck links, and a clearly labeled demo-video link. Create an editable pitch deck plus PDF export, its reproducible build source, and a timed demo-video script. The video workflow must show a real agent issuing an install request, SSS blocking a slopsquatted package before the child process starts, operator intervention with exact approval scope, and a successful authorized retry. Do not present the dashboard as the primary demo. If the final hosted video URL is not available, use one conspicuous `DEMO_VIDEO_URL` placeholder and document the single replacement step; do not invent a URL.
+
+- [ ] **Step 2: Add the complete validation driver**
 
 `scripts/validate_production.sh` runs frozen dependency installation, all unit/integration/security/E2E tests, live Exasol tests, mypy, Ruff, Node tests/typecheck/build, Docker Compose rendering, the client interception matrix, browser checks, dependency audits, secret scan, available image scan, backup/restore, and two protected-agent rehearsals.
 
-- [ ] **Step 2: Run the complete release gate**
+- [ ] **Step 3: Run the complete release gate**
 
 Run:
 
@@ -757,7 +767,7 @@ git diff --check
 
 Expected: exit `0`; two protected rehearsals return `23`; neither increments the canary; no unresolved high-severity dependency or image finding remains.
 
-- [ ] **Step 3: Refresh and reconcile branches again**
+- [ ] **Step 4: Refresh and reconcile branches again**
 
 Run:
 
@@ -771,18 +781,18 @@ git cherry codex/agent-guard-demo codex/teammate-1-intelligence
 
 Expected: no `+` commits remain on project implementation branches. Review any newly created remote branch before proceeding.
 
-- [ ] **Step 4: Document the release boundary**
+- [ ] **Step 5: Document the release boundary**
 
 Update the contract changelog for new scopes, pagination, runtime mode, and persistence. Add a `0.2.0` changelog entry covering production deployment, arbitrary package evidence, durable enforcement, supported clients, security boundaries, and the explicit Exasol licensing/deployment limitation.
 
-- [ ] **Step 5: Commit the release gate**
+- [ ] **Step 6: Commit the release gate**
 
 ```bash
-git add scripts PLAN.md docs/contracts/CHANGELOG.md CHANGELOG.md
+git add scripts PLAN.md README.md docs/contracts/CHANGELOG.md docs/pitch docs/demo-video-script.md CHANGELOG.md
 git commit -m "chore: enforce production release gates"
 ```
 
-- [ ] **Step 6: Re-run validation from the exact integration commit**
+- [ ] **Step 7: Re-run validation from the exact integration commit**
 
 Run:
 
@@ -793,7 +803,7 @@ git status --short
 
 Expected: exit `0` and an empty status.
 
-- [ ] **Step 7: Merge into main without discarding user work**
+- [ ] **Step 8: Merge into main without discarding user work**
 
 Verify `/home/minnhaaaaa/Documents/exasol/SSS` is clean, then run:
 
