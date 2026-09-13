@@ -42,6 +42,29 @@ rich = "^13.9"
     ]
 
 
+def test_poetry_table_and_group_dependencies_preserve_non_registry_sources() -> None:
+    text = """
+[tool.poetry.dependencies]
+httpx = { version = "^0.28", extras = ["http2"] }
+private-lib = { version = "1.0", source = "company" }
+git-lib = { git = "https://github.com/example/git-lib.git", rev = "abc" }
+local-lib = { path = "../local-lib" }
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+"""
+
+    mentions = extract_python_mentions(text)
+
+    assert [(item.canonical_name, item.version_spec, item.source) for item in mentions] == [
+        ("httpx", "^0.28", PackageSource.REGISTRY),
+        ("private-lib", "1.0", PackageSource.ALTERNATE_REGISTRY),
+        ("git-lib", None, PackageSource.VCS),
+        ("local-lib", None, PackageSource.LOCAL_PATH),
+        ("pytest", "^8.3", PackageSource.REGISTRY),
+    ]
+
+
 def test_ast_imports_apply_aliases_and_exclude_standard_library() -> None:
     text = """
 import json

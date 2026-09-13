@@ -74,21 +74,58 @@ def _parse_toml(text: str) -> list[ExtractedPackage]:
 
     tool = document.get("tool", {})
     poetry: Any = tool.get("poetry", {}) if isinstance(tool, dict) else {}
-    dependencies = poetry.get("dependencies", {}) if isinstance(poetry, dict) else {}
-    if isinstance(dependencies, dict):
-        for name, value in dependencies.items():
-            if name == "python" or not isinstance(value, str):
-                continue
-            mentions.append(
-                ExtractedPackage(
-                    ecosystem=Ecosystem.PYPI,
-                    raw=f"{name}{value}",
-                    canonical_name=str(canonicalize_name(name)),
-                    version_spec=value,
-                    source=PackageSource.REGISTRY,
-                )
+    if isinstance(poetry, dict):
+        dependency_groups: list[object] = [
+            poetry.get("dependencies", {}),
+            poetry.get("dev-dependencies", {}),
+        ]
+        groups = poetry.get("group", {})
+        if isinstance(groups, dict):
+            dependency_groups.extend(
+                group.get("dependencies", {})
+                for group in groups.values()
+                if isinstance(group, dict)
             )
+        for dependencies in dependency_groups:
+            if not isinstance(dependencies, dict):
+                continue
+            for name, value in dependencies.items():
+                if name == "python" or not isinstance(name, str):
+                    continue
+                mention = _poetry_dependency(name, value)
+                if mention is not None:
+                    mentions.append(mention)
     return mentions
+
+
+def _poetry_dependency(name: str, value: object) -> ExtractedPackage | None:
+    version: str | None
+    source = PackageSource.REGISTRY
+    requested_registry: str | None = None
+    if isinstance(value, str):
+        version = value
+    elif isinstance(value, dict):
+        version_value = value.get("version")
+        version = version_value if isinstance(version_value, str) else None
+        if isinstance(value.get("git"), str):
+            source = PackageSource.VCS
+        elif isinstance(value.get("path"), str):
+            source = PackageSource.LOCAL_PATH
+        elif isinstance(value.get("url"), str):
+            source = PackageSource.DIRECT_URL
+        elif isinstance(value.get("source"), str):
+            source = PackageSource.ALTERNATE_REGISTRY
+            requested_registry = value["source"]
+    else:
+        return None
+    return ExtractedPackage(
+        ecosystem=Ecosystem.PYPI,
+        raw=f"{name}{version or ''}",
+        canonical_name=str(canonicalize_name(name)),
+        version_spec=version,
+        source=source,
+        requested_registry=requested_registry,
+    )
 
 
 def _command_requirements(line: str) -> list[str]:

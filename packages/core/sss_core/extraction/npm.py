@@ -154,7 +154,24 @@ def _parse_commands(text: str) -> list[ExtractedPackage]:
         ):
             start = 2
         elif len(argv) >= 2 and argv[0] == "npx":
-            start = 1
+            registry = _registry_from_argv(argv)
+            package_options: list[str] = []
+            index = 1
+            while index < len(argv):
+                value = argv[index]
+                if value in {"-p", "--package"} and index + 1 < len(argv):
+                    package_options.append(argv[index + 1])
+                    index += 2
+                    continue
+                if value.startswith("--package="):
+                    package_options.append(value.split("=", maxsplit=1)[1])
+                index += 1
+            if not package_options:
+                package_options = [value for value in argv[1:] if not value.startswith("-")][:1]
+            mentions.extend(
+                _classify_spec(spec, requested_registry=registry) for spec in package_options
+            )
+            continue
         if start is None:
             continue
         registry = _registry_from_argv(argv)

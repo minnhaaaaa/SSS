@@ -31,6 +31,14 @@ npx vite@latest
     ]
 
 
+def test_npx_package_option_extracts_the_package_not_the_executed_binary() -> None:
+    mentions = extract_npm_mentions("npx --yes --package typescript@5 tsc --version")
+
+    assert [(item.canonical_name, item.version_spec) for item in mentions] == [
+        ("typescript", "5")
+    ]
+
+
 def test_extracts_direct_package_json_dependencies() -> None:
     text = json.dumps(
         {
