@@ -39,11 +39,21 @@ def test_replay_replaces_only_exact_identity_and_inserts_fixed_counts() -> None:
         sql for sql, _ in connection.calls if sql.startswith("INSERT INTO PACKAGE_MENTIONS")
     ]
     assert fixture.package.canonical_name not in all_sql
+    assert "'{}'" not in all_sql
+    assert any(parameters.get("parameters_json") == "{}" for parameters in all_parameters)
     assert any(
         parameters.get("canonical_name") == fixture.package.canonical_name
         for parameters in all_parameters
     )
     assert len(mention_inserts) == 46 + 8 + 5
+    bound_timestamps = [
+        value
+        for parameters in all_parameters
+        for value in parameters.values()
+        if hasattr(value, "tzinfo")
+    ]
+    assert bound_timestamps
+    assert all(timestamp.tzinfo is None for timestamp in bound_timestamps)
     assert connection.commits == 1
     assert connection.rollbacks == 0
 

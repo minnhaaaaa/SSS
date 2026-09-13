@@ -55,9 +55,9 @@ def test_migrating_an_empty_schema_twice_is_a_noop() -> None:
 
 @pytest.mark.skipif(
     not os.getenv("SSS_EXASOL_DSN"),
-    reason="requires an explicitly provisioned Exasol Personal deployment",
+    reason="requires an explicitly provisioned Exasol database",
 )
-def test_migrations_run_twice_on_exasol_personal() -> None:
+def test_migrations_run_twice_on_live_exasol() -> None:
     import pyexasol
 
     connection = pyexasol.connect(

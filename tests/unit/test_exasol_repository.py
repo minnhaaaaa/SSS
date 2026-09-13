@@ -54,6 +54,12 @@ def test_evidence_and_transition_write_is_atomic_and_parameterized() -> None:
     assert len(connection.calls) == 2
     assert all("demo" not in sql for sql, _ in connection.calls)
     assert all(params is not None for _, params in connection.calls)
+    assert all(
+        params is not None
+        and params["checked_at"] == datetime(2026, 9, 7)
+        and params["checked_at"].tzinfo is None
+        for _, params in connection.calls
+    )
 
 
 def test_failed_transition_rolls_back_evidence_write() -> None:

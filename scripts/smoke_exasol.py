@@ -18,7 +18,7 @@ def _rows(result: Any) -> list[tuple[Any, ...]]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Verify an SSS Exasol Personal schema")
+    parser = argparse.ArgumentParser(description="Verify an SSS Exasol schema")
     parser.add_argument(
         "--expect-demo",
         action="store_true",

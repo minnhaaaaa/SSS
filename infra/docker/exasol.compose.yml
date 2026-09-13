@@ -1,0 +1,16 @@
+name: sss-local-exasol
+
+services:
+  exasol:
+    image: exasol/docker-db:2025.1.14@sha256:620b97790dfdab8284f4f38b220c322bdd733dbf1e1bbfb0f1dc0b6904ca8115
+    container_name: sss-exasol
+    privileged: true
+    stop_grace_period: 120s
+    mem_limit: 8g
+    ports:
+      - "127.0.0.1:8563:8563"
+    volumes:
+      - sss_exasol_data:/exa
+
+volumes:
+  sss_exasol_data: {}

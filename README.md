@@ -11,12 +11,14 @@ Requirements: Python 3.12, `uv`, Node 22+, and pnpm 10.31.
 ./scripts/validate_local.sh
 ```
 
-## Exasol Personal
+## Exasol
 
-Deployed SSS uses Exasol Personal on AWS or Azure. See
-[`docs/operations/exasol-personal.md`](docs/operations/exasol-personal.md) for provision, migration,
-readiness, smoke, cost, and cleanup instructions. A real database test runs when all
-`SSS_EXASOL_*` variables in `.env.example` are set; otherwise only that credential-gated test skips.
+The target deployment uses Exasol Personal. AWS and Azure infrastructure is billed by the cloud
+provider, and Exasol Personal's local preset currently supports only Apple-silicon macOS. Linux
+development therefore uses Exasol's official, free, 10 GiB-limited Docker Edition as the local SQL
+integration runtime. See [`docs/operations/exasol-personal.md`](docs/operations/exasol-personal.md)
+for the zero-cost local workflow, Personal deployment options, migrations, replay, readiness, and
+teardown. The credential-gated database test runs whenever `SSS_EXASOL_*` is configured.
 
 ## Integration contracts
 

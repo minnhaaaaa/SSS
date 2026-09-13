@@ -4,7 +4,7 @@ import hashlib
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
@@ -43,6 +43,13 @@ def _statements(document: str) -> tuple[str, ...]:
 
 def _file_checksum(path: Path) -> str:
     return hashlib.sha256(path.read_text(encoding="utf-8").encode()).hexdigest()
+
+
+def _exasol_timestamp(value: datetime) -> datetime:
+    """Bind instants to Exasol's timezone-free TIMESTAMP columns as naive UTC."""
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(UTC).replace(tzinfo=None)
 
 
 class MigrationRunner:
@@ -182,7 +189,7 @@ class ExasolEvidenceRepository:
             "endpoint": evidence.endpoint,
             "status": evidence.status.value,
             "http_status": evidence.http_status,
-            "checked_at": evidence.checked_at,
+            "checked_at": _exasol_timestamp(evidence.checked_at),
             "response_sha256": evidence.response_sha256,
             "error_class": evidence.error_class,
             "candidate_status": candidate_status.value,
@@ -321,7 +328,7 @@ class ExasolDemoRepository:
                 "FIRST_ABSENCE_AT, FIRST_REGISTRATION_AT, DISCLOSURE_CLASS, SYNTHETIC) VALUES "
                 "({ecosystem}, {registry_origin}, {canonical_name}, 'verified_hallucination', "
                 "{first_absence_at}, NULL, 'restricted_target_intelligence', TRUE)",
-                {**identity, "first_absence_at": fixture.first_absence_at},
+                {**identity, "first_absence_at": _exasol_timestamp(fixture.first_absence_at)},
             )
             self._connection.execute(
                 "INSERT INTO REGISTRY_CHECKS (CHECK_ID, ECOSYSTEM, REGISTRY_ORIGIN, "
@@ -336,7 +343,7 @@ class ExasolDemoRepository:
                         f"{fixture.package.registry_origin}/"
                         f"{quote(fixture.package.canonical_name, safe='@')}"
                     ),
-                    "checked_at": fixture.first_absence_at,
+                    "checked_at": _exasol_timestamp(fixture.first_absence_at),
                     "response_sha256": "a" * 64,
                 },
             )
@@ -358,12 +365,13 @@ class ExasolDemoRepository:
                 "CONFIGURATION_ID FROM DUAL) S ON T.CONFIGURATION_ID=S.CONFIGURATION_ID "
                 "WHEN NOT MATCHED THEN INSERT (CONFIGURATION_ID, PROVIDER, MODEL_ID, "
                 "PARAMETERS_JSON, FIRST_SEEN_AT, LAST_SEEN_AT) VALUES ({configuration_id}, "
-                "'replay', {model_id}, '{}', {first_seen_at}, {last_seen_at})",
+                "'replay', {model_id}, {parameters_json}, {first_seen_at}, {last_seen_at})",
                 {
                     "configuration_id": configuration_id,
                     "model_id": f"replay-model-{index}",
-                    "first_seen_at": fixture.first_absence_at,
-                    "last_seen_at": fixture.attack_at,
+                    "parameters_json": "{}",
+                    "first_seen_at": _exasol_timestamp(fixture.first_absence_at),
+                    "last_seen_at": _exasol_timestamp(fixture.attack_at),
                 },
             )
         self._connection.execute(
@@ -378,7 +386,11 @@ class ExasolDemoRepository:
             },
         )
         for row in fixture.mention_rows():
-            parameters = {**identity, **row}
+            parameters = {
+                **identity,
+                **row,
+                "observed_at": _exasol_timestamp(row["observed_at"]),
+            }
             if row["provenance"] == "model_probe":
                 self._connection.execute(
                     "MERGE INTO MODEL_RUNS T USING (SELECT {source_id} RUN_ID FROM DUAL) S "
