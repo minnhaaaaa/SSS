@@ -5,7 +5,7 @@ import { useControlRoom } from "../app/control-room-context";
 import { titleCase } from "../lib/format";
 
 export function ProfilePage() {
-  const { apiConnection, liveConnection, serviceName, lastEventType, dataMode, retryConnections } =
+  const { apiConnection, liveConnection, serviceName, lastEventType, retryConnections } =
     useControlRoom();
 
   return (
@@ -20,14 +20,14 @@ export function ProfilePage() {
             <CircleUserRound size={36} strokeWidth={1.5} aria-hidden="true" />
           </span>
           <div>
-            <p className="m-0 font-mono text-xs tracking-[0.14em] text-[#0C0F0C]/55">OPERATOR PROFILE</p>
-            <h1 className="mt-2 mb-0 text-3xl font-semibold tracking-[-0.04em] text-[#0C0F0C]">Local Operator</h1>
-            <p className="mt-2 mb-0 text-sm text-[#0C0F0C]/65">Account identity is not configured by the current backend.</p>
+            <p className="m-0 font-mono text-xs tracking-[0.14em] text-[#0C0F0C]/55">CURRENT SESSION</p>
+            <h1 className="mt-2 mb-0 text-3xl font-semibold tracking-[-0.04em] text-[#0C0F0C]">Runtime Status</h1>
+            <p className="mt-2 mb-0 text-sm text-[#0C0F0C]/65">Values below come from the active service connection.</p>
           </div>
         </div>
 
         <div className="grid gap-4 p-6 md:grid-cols-3">
-          <ProfileCard icon={Database} label="Data source" value={dataMode === "prototype" ? "Demo dataset" : "Live control plane"} />
+          <ProfileCard icon={Database} label="Data source" value={serviceName ?? titleCase(apiConnection)} />
           <ProfileCard icon={ShieldCheck} label="API connection" value={serviceName ?? titleCase(apiConnection)} />
           <ProfileCard icon={RadioTower} label="Event stream" value={titleCase(liveConnection)} />
         </div>

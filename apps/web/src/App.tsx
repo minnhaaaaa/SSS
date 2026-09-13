@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { ControlRoomProvider } from "./app/control-room-context";
-import { dataMode } from "./app/services";
 import { AppShell } from "./components/app-shell";
 import { CoveragePage } from "./pages/coverage-page";
 import { DecisionsPage } from "./pages/decisions-page";
@@ -19,7 +18,7 @@ export function App() {
         <RouteScrollReset />
         <Routes>
           <Route element={<AppShell />}>
-            <Route index element={dataMode === "live" ? <Navigate to="/demo" replace /> : <OverviewPage />} />
+            <Route index element={<OverviewPage />} />
             <Route path="radar" element={<RadarPage />} />
             <Route path="packages" element={<PackagesPage />} />
             <Route path="decisions" element={<DecisionsPage />} />

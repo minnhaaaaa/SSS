@@ -1,227 +1,97 @@
-import {
-  Ban,
-  Check,
-  CircleDotDashed,
-  Play,
-  Radio,
-  Shield,
-  Terminal,
-  TriangleAlert,
-  type LucideIcon,
-} from "lucide-react";
-import { useRef, useState } from "react";
+import { Activity, DatabaseZap, ShieldCheck, Terminal } from "lucide-react";
 
-import { api, dataMode } from "../app/services";
-import { ErrorState, LoadingState } from "../components/async-state";
+import { api } from "../app/services";
+import { EmptyState, ErrorState, LoadingState } from "../components/async-state";
 import { PageFrame } from "../components/page-frame";
 import { Panel } from "../components/panel";
-import type { DemoAction, DemoStatus } from "../domain/control-room";
+import type { DecisionItem } from "../domain/control-room";
 import { useApiResource } from "../hooks/use-api-resource";
-import { gsap, useGSAP } from "../motion/register";
-
-const actions: readonly { id: DemoAction; label: string; detail: string }[] = [
-  { id: "replay-evidence", label: "Replay Evidence", detail: "Ingest historical observations" },
-  { id: "register-target", label: "Register Target", detail: "Publish to the controlled registry" },
-  { id: "run-unprotected", label: "Run Unprotected", detail: "Observe the isolated canary" },
-  { id: "run-protected", label: "Run Protected", detail: "Prove pre-execution blocking" },
-];
+import { formatTimestamp, titleCase } from "../lib/format";
 
 export function DemoPage() {
-  const resource = useApiResource((signal) => api.getDemoStatus(signal), []);
-  const [pendingAction, setPendingAction] = useState<DemoAction | null>(null);
-  const [actionError, setActionError] = useState<Error | null>(null);
-
-  const execute = async (action: DemoAction) => {
-    setPendingAction(action);
-    setActionError(null);
-    try {
-      await api.runDemoAction(action);
-      resource.reload();
-    } catch (error) {
-      setActionError(error instanceof Error ? error : new Error("Demo action failed"));
-    } finally {
-      setPendingAction(null);
-    }
-  };
+  const resource = useApiResource(async (signal) => {
+    const [decisions, coverage] = await Promise.all([
+      api.getDecisions(signal),
+      api.getCoverage(signal),
+    ]);
+    return { decisions, coverage };
+  }, []);
 
   return (
     <PageFrame
-      eyebrow="Proof / Controlled lab"
-      title="Attack & Prevention"
-      description={
-        dataMode === "prototype"
-          ? "Walk through the temporary replay, registration, and isolated enforcement sequence."
-          : "The dashboard is optional evidence. Run the real protection flow in the coding-agent and operator terminals."
-      }
+      eyebrow="Enforcement / Runtime"
+      title="Live Protection Evidence"
+      description="Observed enforcement outcomes and telemetry from the active control plane."
     >
-      {dataMode === "live" && (
-        <Panel eyebrow="Primary demo surface" title="Agent protection active">
-          <p className="demo-message">
-            <Terminal aria-hidden="true" /> Agent: <code>./scripts/demo.sh agent</code>
-          </p>
-          <p className="demo-message">
-            <Shield aria-hidden="true" /> Operator: <code>./scripts/demo.sh operator</code>
-          </p>
-        </Panel>
-      )}
-      {resource.loading && <LoadingState label="Reading demo state" />}
+      {resource.loading && <LoadingState label="Reading runtime evidence" />}
       {resource.error && <ErrorState error={resource.error} retry={resource.reload} />}
-      {actionError && <ErrorState error={actionError} retry={resource.reload} />}
-      {resource.data && <DemoExperience status={resource.data} pending={pendingAction} execute={execute} />}
+      {resource.data && (
+        <div className="grid gap-5">
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Observed totals">
+            <Metric label="Guard decisions" value={resource.data.decisions.length} />
+            <Metric label="Protected agents" value={resource.data.coverage.protectedAgents} />
+            <Metric
+              label="Verified recommendations"
+              value={resource.data.coverage.verifiedRecommendations}
+            />
+            <Metric label="Observation days" value={resource.data.coverage.observationDays} />
+          </section>
+
+          {resource.data.decisions.length === 0 ? (
+            <EmptyState
+              title="No enforcement activity observed"
+              detail="Guard decisions will appear here after an authenticated install check is received."
+            />
+          ) : (
+            <Panel eyebrow="Observed decisions" title="Runtime Ledger">
+              <ol className="m-0 grid list-none gap-3 p-0">
+                {resource.data.decisions.slice(0, 20).map((decision) => (
+                  <DecisionRow key={decision.id} decision={decision} />
+                ))}
+              </ol>
+            </Panel>
+          )}
+        </div>
+      )}
     </PageFrame>
   );
 }
 
-function DemoExperience({
-  status,
-  pending,
-  execute,
-}: {
-  readonly status: DemoStatus;
-  readonly pending: DemoAction | null;
-  readonly execute: (action: DemoAction) => Promise<void>;
-}) {
-  const root = useRef<HTMLDivElement>(null);
-  useGSAP(
-    () => {
-      if (status.state !== "blocked") return;
-      const media = gsap.matchMedia();
-      media.add("(prefers-reduced-motion: no-preference)", () => {
-        gsap
-          .timeline({ defaults: { duration: 0.5, ease: "power3.out" } })
-          .from(".blocked-hero__icon", { scale: 0.65, rotation: -12, autoAlpha: 0 })
-          .from(".blocked-hero h2, .blocked-hero p", { y: 14, autoAlpha: 0, stagger: 0.08 }, "-=0.22")
-          .from(".proof-tile", { y: 12, autoAlpha: 0, stagger: 0.06 }, "-=0.2");
-      });
-      return () => media.revert();
-    },
-    { dependencies: [status.state], scope: root, revertOnUpdate: true },
-  );
-
+function Metric({ label, value }: { readonly label: string; readonly value: number }) {
   return (
-    <div className="demo-experience" ref={root}>
-      {status.state === "blocked" && (
-        <section className="blocked-hero" data-reveal>
-          <Ban className="blocked-hero__icon" aria-hidden="true" />
-          <p className="eyebrow">SSS Guard interception</p>
-          <h2>Installation Blocked</h2>
-          {status.targetPackage && <p className="blocked-hero__package">{status.targetPackage}</p>}
-          <div className="interception-line" aria-label="Agent request blocked before package manager">
-            <span><Terminal aria-hidden="true" /> Agent</span>
-            <i aria-hidden="true" />
-            <strong><Shield aria-hidden="true" /> Guard / Block</strong>
-            <i className="is-blocked" aria-hidden="true" />
-            <span><Ban aria-hidden="true" /> Package manager</span>
-          </div>
-        </section>
-      )}
-
-      <ol className="demo-steps" data-reveal>
-        {actions.map((action, index) => {
-          const complete = status.completedSteps.includes(action.id);
-          const available = status.availableActions.includes(action.id);
-          return (
-            <li key={action.id} data-complete={complete}>
-              <span>{complete ? <Check aria-hidden="true" /> : String(index + 1).padStart(2, "0")}</span>
-              <div>
-                <strong>{action.label}</strong>
-                <small>{action.detail}</small>
-              </div>
-              {dataMode === "prototype" ? (
-                <button
-                  className="button button--action"
-                  type="button"
-                  disabled={!available || pending !== null}
-                  onClick={() => void execute(action.id)}
-                >
-                  {pending === action.id ? <CircleDotDashed className="spin" aria-hidden="true" /> : <Play aria-hidden="true" />}
-                  {complete ? (available ? "Run again" : "Complete") : "Run"}
-                </button>
-              ) : (
-                <span className="button button--action" aria-label={`${action.label}: terminal controlled`}>
-                  <Terminal aria-hidden="true" /> Terminal
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-
-      <section className="proof-grid" data-reveal>
-        <ProofTile
-          label="Unprotected canary"
-          value={status.unprotectedCanaryCount}
-          detail="Executions observed"
-          icon={TriangleAlert}
-          tone="danger"
-        />
-        <ProofTile
-          label="Protected canary"
-          value={status.protectedCanaryCount}
-          detail="Executions observed"
-          icon={Shield}
-          tone="signal"
-        />
-        <ProofTile
-          label="Package manager"
-          value={status.packageManagerStarted === null ? "Not attempted" : status.packageManagerStarted ? "Started" : "Not started"}
-          detail="Backend-reported child state"
-          icon={Terminal}
-        />
-      </section>
-
-      <section className="proof-grid" aria-label="Frozen policy evidence" data-reveal>
-        <ProofTile
-          label="Absence confidence"
-          value={status.scores.absenceConfidence}
-          detail={`${status.registrationAgeMinutes} minute registration transition`}
-          icon={Shield}
-          tone="signal"
-        />
-        <ProofTile
-          label="Target attractiveness"
-          value={status.scores.targetAttractiveness}
-          detail="46 verified recommendations"
-          icon={TriangleAlert}
-          tone="danger"
-        />
-        <ProofTile
-          label="Package policy risk"
-          value={status.scores.packagePolicyRisk}
-          detail={status.policyVersion}
-          icon={Ban}
-          tone="danger"
-        />
-      </section>
-
-      {status.message && (
-        <Panel eyebrow="Lab response" title="Latest Result">
-          <p className="demo-message" aria-live="polite"><Radio aria-hidden="true" /> {status.message}</p>
-        </Panel>
-      )}
-    </div>
+    <article className="rounded-[20px] bg-[#626362] p-5 text-[#0C0F0C]">
+      <Activity size={18} aria-hidden="true" />
+      <span className="mt-5 block font-mono text-[0.68rem] uppercase tracking-[0.12em] opacity-65">
+        {label}
+      </span>
+      <strong className="mt-2 block font-mono text-3xl">{value}</strong>
+    </article>
   );
 }
 
-function ProofTile({
-  label,
-  value,
-  detail,
-  icon: Icon,
-  tone = "neutral",
-}: {
-  readonly label: string;
-  readonly value: string | number;
-  readonly detail: string;
-  readonly icon: LucideIcon;
-  readonly tone?: "signal" | "danger" | "neutral";
-}) {
+function DecisionRow({ decision }: { readonly decision: DecisionItem }) {
   return (
-    <article className={`proof-tile proof-tile--${tone}`}>
-      <Icon aria-hidden="true" />
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </article>
+    <li className="grid gap-3 rounded-[18px] bg-[#0C0F0C] p-4 text-[#FFF9F4] md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+      <div className="min-w-0">
+        <strong className="block truncate font-mono text-sm">{decision.packageName}</strong>
+        <span className="mt-1 block font-mono text-[0.68rem] text-[#BCC9CD]">
+          {decision.ecosystem.toUpperCase()} · {formatTimestamp(decision.occurredAt)} · {decision.policy}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 font-mono text-[0.68rem] uppercase">
+        <span className="rounded-full bg-[#1E3B29] px-3 py-1.5">
+          <ShieldCheck className="mr-1 inline" size={13} aria-hidden="true" />
+          {titleCase(decision.result)}
+        </span>
+        <span className="rounded-full border border-[#FFF9F4]/15 px-3 py-1.5">
+          <Terminal className="mr-1 inline" size={13} aria-hidden="true" />
+          Manager {decision.packageManagerStarted === null ? "unknown" : decision.packageManagerStarted ? "started" : "not started"}
+        </span>
+        <span className="rounded-full border border-[#FFF9F4]/15 px-3 py-1.5">
+          <DatabaseZap className="mr-1 inline" size={13} aria-hidden="true" />
+          Code {decision.packageCodeExecuted === null ? "unknown" : decision.packageCodeExecuted ? "executed" : "not executed"}
+        </span>
+      </div>
+    </li>
   );
 }
