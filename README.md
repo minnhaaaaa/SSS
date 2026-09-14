@@ -11,7 +11,6 @@ policy before package manager execution, and sends risky requests to a separate 
   hosted recording URL before submission
 - **Pitch deck:** [PowerPoint](docs/pitch/SSS-pitch-deck.pptx) and
   [PDF](docs/pitch/SSS-pitch-deck.pdf)
-- **Recording workflow:** [timed demo script](docs/demo-video-script.md)
 - **Zero cost rehearsal:** [local agent demo](docs/operations/agent-demo.md)
 - **Single organization deployment:** [self hosted operations guide](docs/operations/self-hosted-production.md)
 
