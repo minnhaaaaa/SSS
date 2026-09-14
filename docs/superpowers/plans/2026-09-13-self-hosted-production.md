@@ -792,7 +792,7 @@ git add scripts PLAN.md README.md docs/contracts/CHANGELOG.md docs/pitch docs/de
 git commit -m "chore: enforce production release gates"
 ```
 
-- [ ] **Step 7: Re-run validation from the exact integration commit**
+- [x] **Step 7: Re-run validation from the exact integration commit**
 
 Run:
 
