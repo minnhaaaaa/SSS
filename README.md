@@ -7,8 +7,7 @@ policy before package manager execution, and sends risky requests to a separate 
 ## Submission
 
 - **Source code:** this repository
-- **Demo video:** [recording link pending](DEMO_VIDEO_URL) — replace this one placeholder with the final
-  hosted recording URL before submission
+- **Demo video:** [watch the 49-second local agent-protection demo](docs/demo-video/sss-agent-demo.mp4)
 - **Pitch deck:** [PowerPoint](docs/pitch/SSS-pitch-deck.pptx) and
   [PDF](docs/pitch/SSS-pitch-deck.pdf)
 - **Zero cost rehearsal:** [local agent demo](docs/operations/agent-demo.md)

@@ -10,4 +10,4 @@ Exasol product names remain trademarks of their owner and Exasol software is not
 To rebuild with the Codex bundled presentation runtime, set the skill and runtime paths described by
 the presentation skill, make `@oai/artifact-tool` resolvable for `scripts/build_pitch_deck.mjs`, then
 run the script with the bundled Node executable. Render every slide and inspect it before replacing
-the committed outputs. The final demo video URL has one replacement point in the root README.
+the committed outputs. The repository also includes the final demo video linked from the root README.

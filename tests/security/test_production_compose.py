@@ -137,7 +137,7 @@ def test_agent_runtime_pins_remediated_package_manager_tooling() -> None:
     dockerfile = (ROOT / "infra/docker/agent.Dockerfile").read_text(encoding="utf-8")
 
     assert "ARG SSS_NPM_VERSION=12.0.2" in dockerfile
-    assert "ARG SSS_PNPM_VERSION=12.4.1" in dockerfile
+    assert "ARG SSS_PNPM_VERSION=10.31.0" in dockerfile
     assert "ARG SSS_POETRY_VERSION=2.4.3" in dockerfile
     assert "ARG SSS_NPM_TAR_VERSION=7.5.21" in dockerfile
     assert "ARG SSS_NPM_IP_ADDRESS_VERSION=10.3.1" in dockerfile

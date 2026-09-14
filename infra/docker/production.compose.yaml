@@ -170,7 +170,7 @@ services:
         SSS_PYTHON_BASE_IMAGE: ${SSS_PYTHON_BASE_IMAGE:?Set a digest-pinned Python image}
         SSS_UV_VERSION: ${SSS_UV_VERSION:?Set the frozen uv version}
         SSS_NPM_VERSION: ${SSS_NPM_VERSION:-12.0.2}
-        SSS_PNPM_VERSION: ${SSS_PNPM_VERSION:-12.4.1}
+        SSS_PNPM_VERSION: ${SSS_PNPM_VERSION:-10.31.0}
         SSS_POETRY_VERSION: ${SSS_POETRY_VERSION:-2.4.3}
     environment:
       SSS_API_URL: http://api:8000

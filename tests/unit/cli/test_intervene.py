@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from io import StringIO
+
 import pytest
+from rich.console import Console
 from sss_cli.intervene import ApprovalRetry, run_intervention
+from sss_cli.main import _write_operator_line
 
 
 class RecordingInterventionClient:
@@ -52,6 +56,15 @@ class RecordingInterventionClient:
             request_id="request-one",
         )
 
+
+def test_operator_credentials_are_never_wrapped() -> None:
+    stream = StringIO()
+    narrow_console = Console(file=stream, width=20, color_system=None)
+    credential = "SSS_APPROVAL_TOKEN=" + "a" * 240
+
+    _write_operator_line(credential, output=narrow_console)
+
+    assert stream.getvalue().splitlines() == [credential]
 
 @pytest.mark.parametrize("answer", ["", "invalid"])
 def test_eof_or_invalid_input_defaults_to_keep_blocked(answer: str) -> None:

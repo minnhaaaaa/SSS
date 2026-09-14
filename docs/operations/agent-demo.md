@@ -58,7 +58,7 @@ docker build -f infra/docker/agent.Dockerfile \
   --build-arg SSS_PYTHON_BASE_IMAGE=python:3.12.14-slim-bookworm@sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254 \
   --build-arg SSS_UV_VERSION=0.12.13 \
   --build-arg SSS_NPM_VERSION=12.0.2 \
-  --build-arg SSS_PNPM_VERSION=12.4.1 \
+  --build-arg SSS_PNPM_VERSION=10.31.0 \
   --build-arg SSS_POETRY_VERSION=2.4.3 \
   -t sss-agent:local .
 
@@ -66,7 +66,7 @@ docker run --rm --network none --user 65532:65532 \
   --entrypoint /usr/local/bin/pnpm sss-agent:local --version
 ```
 
-Validation rule: both builds exit zero and the networkless version check prints `12.4.1`. That
+Validation rule: both builds exit zero and the networkless version check prints `10.31.0`. That
 last check proves the real pnpm executable is already in the image and will not fetch Corepack
 metadata from the public internet.
 
@@ -158,7 +158,9 @@ the identical command:
 export SSS_APPROVAL_TOKEN='<operator output>'
 export SSS_APPROVAL_NONCE='<operator output>'
 docker compose -f infra/docker/demo.compose.yaml run --rm \
-  -e SSS_APPROVAL_TOKEN -e SSS_APPROVAL_NONCE protected-agent
+  -e SSS_APPROVAL_TOKEN -e SSS_APPROVAL_NONCE \
+  -e SSS_DEMO_CANARY_URL=http://canary:8090/v1/events \
+  -e SSS_CANARY_TOKEN protected-agent
 ```
 
 The retry must print `SSS APPROVAL — exact one-time approval consumed.` The Guard recomputes the
@@ -169,6 +171,10 @@ must not increase the canary again.
 The displayed risk remains `75` because it is the frozen pre-execution score. The controlled
 lifecycle hook has not yet been ingested as a static finding at decision time; once ingested, the
 separate later assessment is `85` and must carry a new data-as-of timestamp.
+
+For a hands-off rehearsal of this complete sequence, run `./scripts/record_demo.sh`. It resets only
+the disposable demo containers and fixture volumes, masks the approval values, and exits non-zero
+unless the observed exit codes and canary counts are exactly `23/0`, `0/1`, and `23/1`.
 
 ## 8. Optional authenticated evidence UI
 

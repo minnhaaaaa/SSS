@@ -17,6 +17,12 @@ def test_demo_agent_is_isolated_and_has_only_runtime_guard_credentials() -> None
     assert agent["security_opt"] == ["no-new-privileges:true"]
     assert agent["networks"] == ["protected"]
     assert agent["environment"]["PATH"].startswith("/opt/sss/shims:")
+    assert agent["environment"]["HOME"] == "/tmp/home"  # noqa: S108
+    assert agent["environment"]["XDG_CACHE_HOME"] == "/tmp/cache"  # noqa: S108
+    assert agent["environment"]["XDG_DATA_HOME"] == "/tmp/data"  # noqa: S108
+    assert agent["environment"]["PNPM_STORE_DIR"] == "/tmp/pnpm-store"  # noqa: S108
+    assert agent["environment"]["NPM_CONFIG_CACHE"] == "/tmp/npm-cache"  # noqa: S108
+    assert agent["environment"]["NPM_CONFIG_REGISTRY"] == "https://npm.demo.sss.test"
     serialized = yaml.safe_dump(agent)
     assert "/var/run/docker.sock" not in serialized
     for forbidden in (
@@ -46,6 +52,9 @@ def test_registry_seed_and_unprotected_baseline_are_controlled_and_isolated() ->
     assert seed["entrypoint"] == ["/opt/sss/.venv/bin/python"]
     assert seed["command"] == ["/opt/sss/demo/synthetic-package/seed_registry.py"]
     assert seed["networks"] == ["protected"]
+    assert "healthcheck" in document["services"]["registry"]
+    assert seed["depends_on"]["registry"]["condition"] == "service_healthy"
+    assert seed["depends_on"]["registry-tls"]["condition"] == "service_started"
     assert "SSS_API_TOKEN" not in seed.get("environment", {})
     assert baseline["entrypoint"] == ["/usr/local/bin/pnpm"]
     assert baseline["command"] == [

@@ -114,7 +114,7 @@ def test_live_compose_security_and_local_canary() -> None:
         "SSS_NODE_BASE_IMAGE": os.environ.get("SSS_TEST_NODE_IMAGE", DEFAULT_NODE_IMAGE),
         "SSS_UV_VERSION": "0.12.13",
         "SSS_NPM_VERSION": "12.0.2",
-        "SSS_PNPM_VERSION": "12.4.1",
+        "SSS_PNPM_VERSION": "10.31.0",
         "SSS_POETRY_VERSION": "2.4.3",
         "SSS_API_BEARER_TOKENS": api_token,
         "SSS_GATEWAY_UPSTREAMS_JSON": '{"pypi":"https://pypi.org"}',
