@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from sss_cli.intervene import run_intervention
+from sss_cli.intervene import ApprovalRetry, run_intervention
 
 
 class RecordingInterventionClient:
@@ -44,8 +44,13 @@ class RecordingInterventionClient:
     def keep_blocked(self, intervention_id: str) -> None:
         self.kept.append(intervention_id)
 
-    def approve_once(self, intervention: dict[str, object]) -> None:
+    def approve_once(self, intervention: dict[str, object]) -> ApprovalRetry:
         self.approved.append(str(intervention["intervention_id"]))
+        return ApprovalRetry(
+            token="signed-one-use-token",
+            nonce="nonce-one",
+            request_id="request-one",
+        )
 
 
 @pytest.mark.parametrize("answer", ["", "invalid"])
@@ -65,16 +70,19 @@ def test_eof_or_invalid_input_defaults_to_keep_blocked(answer: str) -> None:
 
 def test_allow_once_uses_the_exact_pending_intervention() -> None:
     client = RecordingInterventionClient()
+    output: list[str] = []
 
     run_intervention(
         client,
         input_line=lambda _prompt: "a",
-        write=lambda _line: None,
+        write=output.append,
         once=True,
     )
 
     assert client.approved == ["intervention-demo"]
     assert client.kept == []
+    assert "SSS_APPROVAL_TOKEN=signed-one-use-token" in output
+    assert "SSS_APPROVAL_NONCE=nonce-one" in output
 
 
 def test_inspect_prints_ordered_evidence_then_keeps_blocked() -> None:

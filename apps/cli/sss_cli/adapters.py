@@ -77,12 +77,37 @@ class HttpGuardClient:
                 json=payload,
                 headers={
                     **self._authorization,
-                    "Idempotency-Key": f"attempt:{payload['decision_id']}",
+                    "Idempotency-Key": (
+                        f"attempt:{payload['decision_id']}:{payload['decision']}:"
+                        f"{str(payload['child_started']).lower()}"
+                    ),
                 },
             )
             response.raise_for_status()
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
             raise GuardAdapterError("install attempt could not be recorded") from exc
+
+    def consume_approval(self, *, token: str, request_id: str, nonce: str) -> str:
+        try:
+            response = self._client.post(
+                f"{self._api_url}/v1/approvals/consume",
+                json={
+                    "token": token,
+                    "request_id": request_id,
+                    "expected_nonce": nonce,
+                },
+                headers={
+                    **self._authorization,
+                    "Idempotency-Key": f"approval-consume:{request_id}:{nonce}",
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("consumed") is not True or payload.get("remaining_uses") != 0:
+                raise ValueError("approval was not atomically consumed")
+            return str(payload["approval_id"])
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            raise GuardAdapterError("exact-scope approval could not be consumed") from exc
 
 
 def _optional_int(value: Any) -> int | None:

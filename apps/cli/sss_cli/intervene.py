@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 from uuid import uuid4
@@ -11,12 +12,19 @@ from uuid import uuid4
 import httpx
 
 
+@dataclass(frozen=True, slots=True)
+class ApprovalRetry:
+    token: str
+    nonce: str
+    request_id: str
+
+
 class InterventionClient(Protocol):
     def list_pending(self) -> tuple[dict[str, object], ...]: ...
 
     def keep_blocked(self, intervention_id: str) -> None: ...
 
-    def approve_once(self, intervention: dict[str, object]) -> None: ...
+    def approve_once(self, intervention: dict[str, object]) -> ApprovalRetry: ...
 
 
 class HttpInterventionClient:
@@ -37,7 +45,7 @@ class HttpInterventionClient:
         )
         response.raise_for_status()
 
-    def approve_once(self, intervention: dict[str, object]) -> None:
+    def approve_once(self, intervention: dict[str, object]) -> ApprovalRetry:
         intervention_id = str(intervention["intervention_id"])
         request = _mapping(intervention["request"])
         package = _mapping(request["package"])
@@ -58,6 +66,13 @@ class HttpInterventionClient:
             headers={**self._headers, "Idempotency-Key": f"approve:{intervention_id}"},
         )
         response.raise_for_status()
+        payload = response.json()
+        returned_claims = _mapping(payload["claims"])
+        return ApprovalRetry(
+            token=str(payload["token"]),
+            nonce=str(returned_claims["nonce"]),
+            request_id=str(request["request_id"]),
+        )
 
 
 def _mapping(value: object) -> dict[str, object]:
@@ -121,8 +136,11 @@ def _handle_one(
                     write(str(label))
             continue
         if answer == "a":
-            client.approve_once(intervention)
+            retry = client.approve_once(intervention)
             write("Exact-scope approval issued for one use.")
+            write(f"SSS_APPROVAL_TOKEN={retry.token}")
+            write(f"SSS_APPROVAL_NONCE={retry.nonce}")
+            write("Retry the same command with both values in its environment.")
             return
         client.keep_blocked(intervention_id)
         write("Installation remains blocked.")

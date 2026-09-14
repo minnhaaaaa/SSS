@@ -32,6 +32,8 @@ class GuardClient(Protocol):
 
     def record_attempt(self, **payload: object) -> None: ...
 
+    def consume_approval(self, *, token: str, request_id: str, nonce: str) -> str: ...
+
 
 class ManagerRunner(Protocol):
     def run(
@@ -257,23 +259,61 @@ class GuardRunner:
             None,
         )
         if blocked is not None:
-            self._render_block(requests[0], blocked)
-            self._record_attempt(manager, argv, blocked, child_started=False)
-            return BLOCK_EXIT_CODE
+            try:
+                approved_retry = self._consume_exact_approval(requests)
+            except GuardAdapterError as exc:
+                self._write(f"SSS BLOCK — {exc}")
+                self._write("Installation was not started.")
+                self._record_attempt(manager, argv, blocked, child_started=False)
+                return BLOCK_EXIT_CODE
+            if not approved_retry:
+                self._render_block(requests[0], blocked)
+                self._record_attempt(manager, argv, blocked, child_started=False)
+                return BLOCK_EXIT_CODE
+            self._write("SSS APPROVAL — exact one-time approval consumed.")
 
         try:
             result = self._process_runner.run(
                 manager,
                 argv,
                 cwd=self._cwd,
-                env=self._environment,
+                env=self._child_environment(),
             )
         except ProcessConfigurationError as exc:
             self._write(f"SSS BLOCK — {exc}")
             self._write("Installation was not started.")
             return BLOCK_EXIT_CODE
-        self._record_attempt(manager, argv, assessments[0], child_started=result.child_started)
+        effective = assessments[0]
+        self._record_attempt(
+            manager,
+            argv,
+            effective,
+            child_started=result.child_started,
+            decision=Decision.ALLOW if blocked is not None else None,
+        )
         return result.returncode
+
+    def _consume_exact_approval(self, requests: tuple[InstallRequest, ...]) -> bool:
+        token = self._environment.get("SSS_APPROVAL_TOKEN", "").strip()
+        nonce = self._environment.get("SSS_APPROVAL_NONCE", "").strip()
+        if not token and not nonce:
+            return False
+        if not token or not nonce or len(requests) != 1:
+            raise GuardAdapterError(
+                "approval retry requires one exact request, token, and nonce"
+            )
+        self._client.consume_approval(
+            token=token,
+            request_id=requests[0].request_id,
+            nonce=nonce,
+        )
+        return True
+
+    def _child_environment(self) -> dict[str, str]:
+        environment = dict(self._environment)
+        environment.pop("SSS_APPROVAL_TOKEN", None)
+        environment.pop("SSS_APPROVAL_NONCE", None)
+        return environment
 
     def _render_block(
         self,
@@ -297,6 +337,7 @@ class GuardRunner:
         assessment: GuardDecisionResult,
         *,
         child_started: bool,
+        decision: Decision | None = None,
     ) -> None:
         self._client.record_attempt(
             decision_id=assessment.decision_id,
@@ -304,6 +345,6 @@ class GuardRunner:
             arguments=arguments,
             agent_family=self._agent_family,
             project_id=self._project_id,
-            decision=assessment.decision.value,
+            decision=(decision or assessment.decision).value,
             child_started=child_started,
         )
