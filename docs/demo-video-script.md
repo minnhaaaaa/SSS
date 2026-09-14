@@ -66,7 +66,9 @@ In **AGENT**, retry the identical command with the two values passed only for th
 
 ```bash
 docker compose -f infra/docker/demo.compose.yaml run --rm \
-  -e SSS_APPROVAL_TOKEN -e SSS_APPROVAL_NONCE protected-agent
+  -e SSS_APPROVAL_TOKEN -e SSS_APPROVAL_NONCE \
+  -e SSS_DEMO_CANARY_URL=http://canary:8090/v1/events \
+  -e SSS_CANARY_TOKEN protected-agent
 ```
 
 Say: “The retry recomputes the same request identifier and atomically consumes the one use grant.

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SSS agent protection demo</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      width: 1440px; height: 900px; margin: 0; overflow: hidden;
+      background: radial-gradient(circle at 75% 10%, #17344a 0, #08131d 38%, #050a10 100%);
+      color: #e8f0f6; font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    header { height: 92px; display: flex; align-items: center; justify-content: space-between; padding: 0 58px; }
+    .brand { font-weight: 750; letter-spacing: .08em; font-size: 22px; }
+    .brand span { color: #64e7be; }
+    .step { color: #93a8ba; font-size: 16px; }
+    main { padding: 0 58px 50px; }
+    h1 { margin: 12px 0 10px; font-size: 42px; line-height: 1.08; letter-spacing: -.035em; }
+    .lead { margin: 0 0 28px; color: #a8bac8; font-size: 20px; }
+    .terminal { height: 625px; overflow: hidden; border: 1px solid #294153; border-radius: 16px; background: #071019; box-shadow: 0 28px 75px #0009; }
+    .bar { height: 48px; display: flex; align-items: center; gap: 9px; padding: 0 18px; border-bottom: 1px solid #203442; background: #0d1923; }
+    .dot { width: 11px; height: 11px; border-radius: 50%; background: #516473; }
+    .dot:first-child { background: #ff6b6b; } .dot:nth-child(2) { background: #ffd166; } .dot:nth-child(3) { background: #64e7be; }
+    .title { margin-left: 12px; color: #8499a9; font: 13px ui-monospace, monospace; }
+    pre { margin: 0; padding: 27px 31px; color: #d8e4ec; white-space: pre-wrap; font: 19px/1.46 "JetBrains Mono", "DejaVu Sans Mono", monospace; }
+    .cmd { color: #92b9d2; } .bad { color: #ff7b83; font-weight: 700; } .good { color: #64e7be; font-weight: 700; }
+    .warn { color: #ffd166; } .dim { color: #7890a2; }
+    .badge { display: inline-block; margin-top: 18px; padding: 8px 12px; border: 1px solid #2f5b50; border-radius: 999px; color: #64e7be; background: #102a25; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <header><div class="brand"><span>SSS</span> / STOP SLOP SQUATTING</div><div class="step" id="step"></div></header>
+  <main><h1 id="heading"></h1><p class="lead" id="lead"></p><section class="terminal"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="title">protected coding agent · local self-hosted demo</span></div><pre id="output"></pre></section></main>
+  <script>
+    const scenes = [
+      { heading: "Agents install packages at machine speed.", lead: "A package can look real today even if it began as a repeated model hallucination.", output: `<span class="cmd">$ agent: solve the task and install the dependency</span>\n\nDemo agent: dependency looks useful; delegating installation to pnpm.\n\n<span class="warn">The risk is not just the package name.</span>\nSSS remembers verified absence, repeated recommendations,\nand the later registration of that same registry identity.\n\n<span class="badge">Local Exasol evidence · no cloud bill</span>` },
+      { heading: "The unsafe install stops before pnpm.", lead: "The agent uses the normal package-manager command. The guard intercepts it at the process boundary.", output: `<span class="cmd">$ docker compose -f infra/docker/demo.compose.yaml run --rm protected-agent</span>\n\nDemo agent: running a controlled fixture task.\nDemo agent: dependency looks useful; delegating installation to pnpm.\n\n<span class="bad">SSS BLOCK — @sss-demo/reserved-synthetic@1.0.0</span>\nRegistry: https://npm.demo.sss.test\nAbsence confidence: 100\nTarget attractiveness: 95\nPackage policy risk: 75\nReasons: REGISTERED_AFTER_HALLUCINATION, HIGH_GLOBAL_RECURRENCE\nInstallation was not started.\n\n<span class="good">Blocked exit code: 23 | Canary executions: 0</span>` },
+      { heading: "A human sees the evidence.", lead: "The dashboard explains the decision, but enforcement happens inside the agent boundary.", output: `<span class="cmd">$ sss intervene</span>\n\nSSS operator intervention required\nPackage: @sss-demo/reserved-synthetic@1.0.0\nRegistry: https://npm.demo.sss.test\nScores: absence 100 / attractiveness 95 / risk 75\n\n<span class="cmd">[i]nspect</span>\nVerified absence confidence: 100\nGlobal target attractiveness: 95\nPre-execution package risk: 75\nRegistered after verified model hallucination\n\n<span class="warn">The package exists now. The timeline is what makes it unsafe.</span>` },
+      { heading: "Approval is exact and single-use.", lead: "The operator allows one package, version, registry, artifact, project, policy version, nonce, and expiry.", output: `<span class="cmd">[a]llow once</span>\n\n<span class="good">Exact-scope approval issued for one use.</span>\nSSS_APPROVAL_TOKEN=[hidden]\nSSS_APPROVAL_NONCE=[hidden]\nRetry the same command with both values in its environment.\n\n<span class="dim">The signing key stays outside the agent.\nThis does not create permanent trust.</span>` },
+      { heading: "The approved retry runs exactly once.", lead: "SSS consumes the grant atomically, removes it from the child environment, and then starts pnpm.", output: `<span class="cmd">$ docker compose ... -e SSS_APPROVAL_TOKEN -e SSS_APPROVAL_NONCE protected-agent</span>\n\n<span class="good">SSS APPROVAL — exact one-time approval consumed.</span>\nPackages: +1\n@sss-demo/reserved-synthetic install: Done\n\ndependencies:\n+ @sss-demo/reserved-synthetic 1.0.0\n\nDone using pnpm v10.31.0\n\n<span class="good">Approved exit code: 0 | Canary executions: 1</span>` },
+      { heading: "Replays fail closed.", lead: "The same approval cannot be reused, and the controlled canary does not run again.", output: `<span class="cmd">$ retry the same approval a second time</span>\n\nDemo agent: dependency looks useful; delegating installation to pnpm.\n\n<span class="bad">SSS BLOCK — exact-scope approval could not be consumed</span>\nInstallation was not started.\n\n<span class="good">Replay exit code: 23 | Canary executions: 1</span>\n\n<span class="badge">Unsafe by default · human-controlled · exact-scope · single-use</span>\n\nSSS gives package installs a memory of what happened\nbefore the name became real.` }
+    ];
+    const scene = scenes[Math.max(0, Math.min(scenes.length - 1, Number(new URLSearchParams(location.search).get('scene') || 0)))];
+    const index = scenes.indexOf(scene) + 1;
+    document.getElementById('step').textContent = `${index} / ${scenes.length}`;
+    document.getElementById('heading').textContent = scene.heading;
+    document.getElementById('lead').textContent = scene.lead;
+    document.getElementById('output').innerHTML = scene.output;
+  </script>
+</body>
+</html>

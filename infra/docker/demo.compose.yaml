@@ -54,6 +54,15 @@ services:
       - ./npm-registry/config.yaml:/verdaccio/conf/config.yaml:ro
       - registry-state:/verdaccio/storage
     networks: [protected]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:4873/-/ping',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 2s
+      timeout: 2s
+      retries: 30
 
   registry-tls:
     image: ${SSS_CADDY_IMAGE:-caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648}
@@ -88,7 +97,11 @@ services:
     volumes:
       - ../../.runtime/tls/npm.demo.sss.test.crt:/run/sss-tls/npm.demo.sss.test.crt:ro
     networks: [protected]
-    depends_on: [registry-tls]
+    depends_on:
+      registry:
+        condition: service_healthy
+      registry-tls:
+        condition: service_started
     read_only: true
     tmpfs:
       - /tmp:size=32m,noexec,nosuid,nodev
@@ -140,6 +153,12 @@ services:
       SSS_DEMO_ARTIFACT_SHA256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       SSS_REAL_EXECUTABLES_JSON: '{"pnpm":"/usr/local/bin/pnpm"}'
       NODE_EXTRA_CA_CERTS: /run/sss-tls/npm.demo.sss.test.crt
+      HOME: /tmp/home
+      XDG_CACHE_HOME: /tmp/cache
+      XDG_DATA_HOME: /tmp/data
+      PNPM_STORE_DIR: /tmp/pnpm-store
+      NPM_CONFIG_CACHE: /tmp/npm-cache
+      NPM_CONFIG_REGISTRY: https://npm.demo.sss.test
     volumes:
       - ../../.runtime/tls/npm.demo.sss.test.crt:/run/sss-tls/npm.demo.sss.test.crt:ro
       - agent-workspace:/workspace

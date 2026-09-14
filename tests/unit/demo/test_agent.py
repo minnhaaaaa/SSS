@@ -21,7 +21,17 @@ def test_controlled_agent_invokes_package_manager_boundary_once() -> None:
     result = run_agent(backend=backend, environment={}, write=output.append)
 
     assert result == 23
-    assert backend.calls == [(('pnpm', 'add', DEMO_PACKAGE), False)]
+    assert backend.calls == [
+        (
+            (
+                "pnpm",
+                "add",
+                DEMO_PACKAGE,
+                "--allow-build=@sss-demo/reserved-synthetic",
+            ),
+            False,
+        )
+    ]
     assert DEMO_PACKAGE == "@sss-demo/reserved-synthetic@1.0.0"
     assert any("controlled fixture" in line.lower() for line in output)
     assert any("delegating" in line.lower() for line in output)

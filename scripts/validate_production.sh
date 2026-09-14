@@ -81,7 +81,7 @@ docker build -f infra/docker/agent.Dockerfile \
   --build-arg SSS_PYTHON_BASE_IMAGE="$python_image" \
   --build-arg SSS_UV_VERSION=0.12.13 \
   --build-arg SSS_NPM_VERSION=12.0.2 \
-  --build-arg SSS_PNPM_VERSION=12.4.1 \
+  --build-arg SSS_PNPM_VERSION=10.31.0 \
   --build-arg SSS_POETRY_VERSION=2.4.3 \
   -t sss-agent:production .
 docker build -f infra/docker/web.Dockerfile \

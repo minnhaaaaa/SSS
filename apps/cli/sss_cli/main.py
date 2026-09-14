@@ -27,6 +27,11 @@ admin_app.add_typer(token_app, name="token")
 console = Console()
 
 
+def _write_operator_line(message: str, *, output: Console = console) -> None:
+    """Emit copyable approval credentials without terminal-width wrapping."""
+    output.print(message, soft_wrap=True)
+
+
 @app.command()
 def configure(
     server: Annotated[str, typer.Option("--server", help="Guard API base URL.")],
@@ -104,7 +109,7 @@ def intervene(
     run_intervention(
         client,
         input_line=typer.prompt,
-        write=console.print,
+        write=_write_operator_line,
         once=not watch,
     )
 

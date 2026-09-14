@@ -10,6 +10,10 @@ from typing import Protocol
 DEMO_PACKAGE = "@sss-demo/reserved-synthetic@1.0.0"
 
 
+def _write_line(message: str) -> None:
+    print(message, flush=True)
+
+
 class AgentProcessBackend(Protocol):
     def run(self, argv: Sequence[str], *, env: Mapping[str, str]) -> int: ...
 
@@ -29,12 +33,20 @@ def run_agent(
     *,
     backend: AgentProcessBackend | None = None,
     environment: Mapping[str, str] = environ,
-    write: Callable[[str], None] = print,
+    write: Callable[[str], None] = _write_line,
 ) -> int:
     write("Demo agent: running a controlled fixture task.")
     write("Demo agent: dependency looks useful; delegating installation to pnpm.")
     process = backend or SubprocessAgentBackend()
-    return process.run(("pnpm", "add", DEMO_PACKAGE), env=environment)
+    return process.run(
+        (
+            "pnpm",
+            "add",
+            DEMO_PACKAGE,
+            "--allow-build=@sss-demo/reserved-synthetic",
+        ),
+        env=environment,
+    )
 
 
 def main() -> None:
