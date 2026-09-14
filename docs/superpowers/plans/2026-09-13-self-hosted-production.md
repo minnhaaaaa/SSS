@@ -767,7 +767,7 @@ git diff --check
 
 Expected: exit `0`; two protected rehearsals return `23`; neither increments the canary; no unresolved high-severity dependency or image finding remains.
 
-- [ ] **Step 4: Refresh and reconcile branches again**
+- [x] **Step 4: Refresh and reconcile branches again**
 
 Run:
 
@@ -785,7 +785,7 @@ Expected: no `+` commits remain on project implementation branches. Review any n
 
 Update the contract changelog for new scopes, pagination, runtime mode, and persistence. Add a `0.2.0` changelog entry covering production deployment, arbitrary package evidence, durable enforcement, supported clients, security boundaries, and the explicit Exasol licensing/deployment limitation.
 
-- [ ] **Step 6: Commit the release gate**
+- [x] **Step 6: Commit the release gate**
 
 ```bash
 git add scripts PLAN.md README.md docs/contracts/CHANGELOG.md docs/pitch docs/demo-video-script.md CHANGELOG.md
