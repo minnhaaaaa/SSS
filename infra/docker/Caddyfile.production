@@ -1,0 +1,30 @@
+{$SSS_TLS_HOST}:8443 {
+	tls /run/secrets/tls_certificate /run/secrets/tls_private_key
+	encode zstd gzip
+
+	basic_auth {
+		{$SSS_OPERATOR_USERNAME} {file./run/secrets/operator_password_hash}
+	}
+
+	@api path /v1/* /health/*
+	handle @api {
+		reverse_proxy api:8000 {
+			header_up -X-SSS-Operator
+			header_up -X-SSS-Proxy-Token
+			header_up Authorization "Bearer {file./run/secrets/browser_api_token}"
+			header_up X-SSS-Operator {$SSS_OPERATOR_USERNAME}
+		}
+	}
+
+	handle {
+		reverse_proxy web:8080
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+}

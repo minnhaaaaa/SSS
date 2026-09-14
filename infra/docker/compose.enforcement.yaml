@@ -1,0 +1,174 @@
+name: sss-enforcement
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SSS_PYTHON_BASE_IMAGE: ${SSS_PYTHON_BASE_IMAGE:?Set a digest-pinned Python 3.12 image}
+        SSS_UV_VERSION: ${SSS_UV_VERSION:?Set the pinned uv version used for frozen installs}
+    command:
+      - uvicorn
+      - --factory
+      - sss_api.main:create_app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    environment:
+      SSS_ENV: ${SSS_ENV:-test}
+      SSS_POLICY_VERSION: ${SSS_POLICY_VERSION:-sss-hackathon-v3}
+      SSS_API_BEARER_TOKENS: ${SSS_API_BEARER_TOKENS:?Set SSS_API_BEARER_TOKENS}
+      SSS_API_MAX_BODY_BYTES: ${SSS_API_MAX_BODY_BYTES:-1048576}
+      SSS_IDEMPOTENCY_KEY_MAX_BYTES: ${SSS_IDEMPOTENCY_KEY_MAX_BYTES:-128}
+      SSS_SSE_HEARTBEAT_SECONDS: ${SSS_SSE_HEARTBEAT_SECONDS:-15}
+      SSS_SSE_BUFFER_SIZE: ${SSS_SSE_BUFFER_SIZE:-512}
+    networks:
+      - protected
+      - control-plane
+    ports:
+      - 127.0.0.1:${SSS_API_HOST_PORT:-8000}:8000
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  gateway:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SSS_PYTHON_BASE_IMAGE: ${SSS_PYTHON_BASE_IMAGE:?Set a digest-pinned Python 3.12 image}
+        SSS_UV_VERSION: ${SSS_UV_VERSION:?Set the pinned uv version used for frozen installs}
+    command:
+      - uvicorn
+      - --factory
+      - sss_gateway.main:create_app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    environment:
+      SSS_GATEWAY_UPSTREAMS_JSON: ${SSS_GATEWAY_UPSTREAMS_JSON:?Set approved registry upstreams}
+      SSS_GATEWAY_PERMITS_JSON: ${SSS_GATEWAY_PERMITS_JSON:?Set exact session registry permits}
+      SSS_GATEWAY_MAX_ARTIFACT_BYTES: ${SSS_GATEWAY_MAX_ARTIFACT_BYTES:-20971520}
+    networks:
+      - protected
+      - gateway-egress
+    ports:
+      - 127.0.0.1:${SSS_GATEWAY_HOST_PORT:-8080}:8080
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/live', timeout=2)
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  canary:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SSS_PYTHON_BASE_IMAGE: ${SSS_PYTHON_BASE_IMAGE:?Set a digest-pinned Python 3.12 image}
+        SSS_UV_VERSION: ${SSS_UV_VERSION:?Set the pinned uv version used for frozen installs}
+    command:
+      - uvicorn
+      - --factory
+      - sss_canary.main:create_app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8090"
+    environment:
+      SSS_CANARY_DATABASE_PATH: /state/events.db
+      SSS_CANARY_TOKEN: ${SSS_CANARY_TOKEN:?Set SSS_CANARY_TOKEN}
+      SSS_CANARY_MARKER: ${SSS_CANARY_MARKER:-DEMO_ONLY_NOT_A_SECRET}
+    volumes:
+      - canary-state:/state
+    networks:
+      - protected
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health/live', timeout=2)
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  protected-agent:
+    build:
+      context: ../..
+      dockerfile: infra/docker/agent.Dockerfile
+      args:
+        SSS_NODE_BASE_IMAGE: ${SSS_NODE_BASE_IMAGE:?Set a digest-pinned Node image}
+        SSS_PYTHON_BASE_IMAGE: ${SSS_PYTHON_BASE_IMAGE:?Set a digest-pinned Python image}
+        SSS_UV_VERSION: ${SSS_UV_VERSION:?Set the pinned uv version}
+        SSS_NPM_VERSION: ${SSS_NPM_VERSION:-12.0.2}
+        SSS_PNPM_VERSION: ${SSS_PNPM_VERSION:-12.4.1}
+        SSS_POETRY_VERSION: ${SSS_POETRY_VERSION:-2.4.3}
+    environment:
+      SSS_API_URL: http://api:8000
+      SSS_GATEWAY_URL: http://gateway:8080
+    depends_on:
+      api:
+        condition: service_healthy
+      gateway:
+        condition: service_healthy
+    volumes:
+      - type: bind
+        source: ${SSS_PROJECT_PATH:?Set SSS_PROJECT_PATH to the project being protected}
+        target: /workspace
+    networks:
+      - protected
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 2
+
+networks:
+  protected:
+    name: ${SSS_PROTECTED_NETWORK:-sss-protected}
+    internal: true
+  control-plane: {}
+  gateway-egress: {}
+
+volumes:
+  canary-state: {}

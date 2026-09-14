@@ -1,0 +1,19 @@
+storage: /verdaccio/storage
+auth:
+  htpasswd:
+    file: /verdaccio/conf/htpasswd
+    max_users: 1
+uplinks: {}
+packages:
+  "@sss-demo/*":
+    access: $all
+    publish: $all
+    unpublish: $all
+  "**":
+    access: $all
+    publish: $authenticated
+    proxy: false
+logs:
+  type: stdout
+  format: pretty
+  level: warn

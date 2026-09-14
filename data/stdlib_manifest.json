@@ -1,0 +1,26 @@
+{
+  "python": "3.12",
+  "generated_at": "2026-09-07",
+  "modules": [
+    "argparse",
+    "ast",
+    "asyncio",
+    "collections",
+    "datetime",
+    "enum",
+    "functools",
+    "hashlib",
+    "json",
+    "logging",
+    "os",
+    "pathlib",
+    "re",
+    "shlex",
+    "subprocess",
+    "sys",
+    "tempfile",
+    "tomllib",
+    "typing",
+    "urllib"
+  ]
+}

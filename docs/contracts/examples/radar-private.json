@@ -1,0 +1,19 @@
+{
+  "data_as_of": "2026-09-12T12:43:00Z",
+  "items": [
+    {
+      "package": {
+        "ecosystem": "npm",
+        "registry_origin": "https://npm.demo.sss.test",
+        "canonical_name": "@sss-demo/reserved-synthetic"
+      },
+      "candidate_status": "registered_after_absence",
+      "verified_model_recommendations": 46,
+      "model_configurations": 3,
+      "protected_agent_attempts": 8,
+      "public_failed_references": 5,
+      "observation_days": 11,
+      "synthetic": true
+    }
+  ]
+}

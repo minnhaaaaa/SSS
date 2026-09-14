@@ -1,0 +1,15 @@
+{
+  "observation_id": "obs-client-001",
+  "package": {
+    "ecosystem": "npm",
+    "registry_origin": "https://npm.demo.sss.test",
+    "canonical_name": "@sss-demo/reserved-synthetic"
+  },
+  "provenance": "agent_install_attempt",
+  "client_pseudonym": "demo-client-01",
+  "agent_family": "codex",
+  "observed_at": "2026-09-12T12:00:00Z",
+  "explicit_install_context": true,
+  "telemetry_opt_in": true,
+  "evidence_label": "Replayed synthetic evidence"
+}

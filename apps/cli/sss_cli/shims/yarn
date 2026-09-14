@@ -1,0 +1,4 @@
+#!/usr/bin/env python3
+from sss_cli.shim import main_for_executable
+
+main_for_executable()

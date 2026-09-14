@@ -1,0 +1,52 @@
+openapi: 3.1.0
+info:
+  title: SSS shared intelligence and policy examples
+  version: sss-hackathon-v3
+  description: >-
+    Teammate 1-owned semantic examples for composition into Teammate 2's API document.
+    These are fixtures, not standalone endpoint definitions.
+paths: {}
+components:
+  examples:
+    ModelObservation:
+      summary: Attributable replayed model recommendation
+      externalValue: ./examples/observation-model.json
+    PublicObservation:
+      summary: Hashed public CI failure observation
+      externalValue: ./examples/observation-public.json
+    ClientObservation:
+      summary: Opt-in pseudonymous protected-agent attempt
+      externalValue: ./examples/observation-client.json
+    RegistryCheck:
+      summary: Conclusive registry absence
+      externalValue: ./examples/registry-check.json
+    PackageDetail:
+      summary: Private temporal evidence detail
+      externalValue: ./examples/package-detail.json
+    PrivateRadar:
+      summary: Restricted package-level radar data
+      externalValue: ./examples/radar-private.json
+    GuardRequest:
+      summary: Exact install request presented to policy
+      externalValue: ./examples/guard-request.json
+    GuardDecision:
+      summary: Deterministic noninteractive block
+      externalValue: ./examples/guard-decision.json
+    InstallAttempt:
+      summary: Proof that the child process did not start
+      externalValue: ./examples/attempt.json
+    ApprovalCreateRequest:
+      summary: Exact-scope approval claims
+      externalValue: ./examples/approval-create-request.json
+    ApprovalCreateResponse:
+      summary: Single-use signed approval
+      externalValue: ./examples/approval-create-response.json
+    ApprovalConsumeRequest:
+      summary: Approval consumption request
+      externalValue: ./examples/approval-consume-request.json
+    ApprovalConsumeResponse:
+      summary: Atomic one-time consumption result
+      externalValue: ./examples/approval-consume-response.json
+    PublicRadarAggregate:
+      summary: Redacted aggregate with no package identity
+      externalValue: ./examples/radar-public-aggregate.json

@@ -1,0 +1,46 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.pem
+*.key
+secrets/
+backups/
+secrets-exasol-*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# JavaScript
+node_modules/
+.pnpm-store/
+apps/web/dist/
+coverage/
+playwright-report/
+test-results/
+
+# Runtime, deployment and temporary output
+.runtime/
+deployment/
+*.log
+*.tmp
+*.pid
+
+# IDE and operating system
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

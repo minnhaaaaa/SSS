@@ -1,0 +1,10 @@
+{
+  "attempt_id": "attempt-demo-001",
+  "decision_id": "decision-demo-001",
+  "command_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "agent_family": "codex",
+  "project_pseudonym": "project-demo",
+  "decision": "block",
+  "child_started": false,
+  "attempted_at": "2026-09-12T12:43:00Z"
+}

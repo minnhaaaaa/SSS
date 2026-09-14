@@ -1,0 +1,5 @@
+{
+  "token": "demo-placeholder-signed-token",
+  "request_id": "req-demo-001",
+  "expected_nonce": "nonce-demo-001"
+}

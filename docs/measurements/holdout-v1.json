@@ -1,0 +1,41 @@
+{
+  "dataset": {
+    "examples": 200,
+    "npm_examples": 100,
+    "overlap_slots": 50,
+    "path": "data/holdout/mentions-v1.jsonl",
+    "pypi_examples": 100,
+    "reconciliation_status": "pending Teammate 2 label import",
+    "sha256": "4756c6b0c48ea1ec3c83912326f376c5e636ff9093902e809c29425310da047c",
+    "teammate_1_labels": 200,
+    "teammate_2_labels_received": 0
+  },
+  "demo_evidence": {
+    "macro_hallucination_rate": 1.0,
+    "micro_hallucination_rate": 1.0,
+    "public_signal_precision": 1.0,
+    "registry_unknown_rate": 0.0,
+    "synthetic_replay": true,
+    "transition_delay_seconds": 2580
+  },
+  "extraction": {
+    "example_count": 200,
+    "false_negatives": 0,
+    "false_positives": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "scope": "controlled deterministic seed corpus",
+    "true_positives": 200
+  },
+  "runtime": {
+    "guard_p50_ms": 16.041,
+    "guard_p95_ms": 38.315,
+    "max_ms": 47.125,
+    "min_ms": 14.817,
+    "non_execution_invariant": true,
+    "protocol": "HTTP loopback to the local Exasol-backed Guard API",
+    "samples": 50,
+    "scope": "one Linux x86-64 development host; five warm-up calls excluded",
+    "verified_sequence": "unprotected canary 0->1; protected agent exit 23; canary remained 1"
+  }
+}
