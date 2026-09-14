@@ -1,4 +1,4 @@
-import { FlaskConical, Gauge, LayoutDashboard, PackageSearch, Radar, RefreshCw, Scale, ShieldCheck, UserRound } from "lucide-react";
+import { FlaskConical, Gauge, Gavel, LayoutDashboard, PackageSearch, Radar, RefreshCw, ShieldCheck, UserRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
@@ -10,7 +10,7 @@ const navigation = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
   { path: "/radar", label: "Radar", icon: Radar },
   { path: "/packages", label: "Packages", icon: PackageSearch },
-  { path: "/decisions", label: "Decisions", icon: Scale },
+  { path: "/decisions", label: "Decisions", icon: Gavel },
   { path: "/coverage", label: "Coverage", icon: ShieldCheck },
   { path: "/demo", label: "Demo", icon: FlaskConical },
 ] as const;
