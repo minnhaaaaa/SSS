@@ -27,7 +27,7 @@ def create_app(
     resolved = settings or GatewaySettings.from_env()
     upstream_client = upstream or RegistryUpstreamClient(resolved)
     permit_set = permits or GatewayPermitSet.from_env()
-    app = FastAPI(title="SSS Registry Gateway", version="0.1.0")
+    app = FastAPI(title="SSS Registry Gateway", version="0.2.0")
     app.state.settings = resolved
     app.state.upstream = upstream_client
     app.state.permits = permit_set

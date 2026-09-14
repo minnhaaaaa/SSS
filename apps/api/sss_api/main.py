@@ -131,7 +131,7 @@ def create_app(
         or demo_controller is not None
     ):
         raise ConfigurationError("production service composition cannot include demo state")
-    app = FastAPI(title="SSS API", version="0.1.0")
+    app = FastAPI(title="SSS API", version="0.2.0")
     app.state.settings = resolved_settings
     app.state.credentials = (
         CredentialStore.from_file(resolved_settings.credentials_file)

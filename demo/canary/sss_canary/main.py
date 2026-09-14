@@ -25,7 +25,7 @@ def create_app(
     resolved_settings = settings or CanarySettings.from_env()
     resolved_repository = repository or CanaryRepository(resolved_settings.database_path)
     resolved_repository.initialize()
-    app = FastAPI(title="SSS Demo Canary", version="0.1.0")
+    app = FastAPI(title="SSS Demo Canary", version="0.2.0")
 
     async def authorize(authorization: str | None = Header(default=None)) -> None:
         scheme, separator, credential = (authorization or "").partition(" ")

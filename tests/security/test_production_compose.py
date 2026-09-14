@@ -32,7 +32,8 @@ def _config(tmp_path: Path) -> dict[str, Any]:
         **os.environ,
         "SSS_PYTHON_BASE_IMAGE": "python-image@sha256:test",
         "SSS_NODE_BASE_IMAGE": "node-image@sha256:test",
-        "SSS_CADDY_IMAGE": "caddy-image@sha256:test",
+        "SSS_GO_BASE_IMAGE": "go-image@sha256:test",
+        "SSS_ALPINE_BASE_IMAGE": "alpine-image@sha256:test",
         "SSS_UV_VERSION": "0.12.13",
         "SSS_EXASOL_DSN": "db.internal.example:8563",
         "SSS_EXASOL_USER": "sss_service",
@@ -123,3 +124,40 @@ def test_caddy_removes_forged_identity_and_injects_scoped_token() -> None:
     assert "browser_api_token" in caddyfile
     assert "basic_auth" in caddyfile
     assert "tls /run/secrets/tls_certificate /run/secrets/tls_private_key" in caddyfile
+
+
+def test_python_runtime_applies_available_os_security_updates() -> None:
+    for name in ("python-service.Dockerfile", "agent.Dockerfile"):
+        dockerfile = (ROOT / "infra/docker" / name).read_text(encoding="utf-8")
+        assert "apt-get upgrade -y" in dockerfile
+        assert "rm -rf /var/lib/apt/lists/" in dockerfile
+
+
+def test_agent_runtime_pins_remediated_package_manager_tooling() -> None:
+    dockerfile = (ROOT / "infra/docker/agent.Dockerfile").read_text(encoding="utf-8")
+
+    assert "ARG SSS_NPM_VERSION=12.0.2" in dockerfile
+    assert "ARG SSS_PNPM_VERSION=12.4.1" in dockerfile
+    assert "ARG SSS_POETRY_VERSION=2.4.3" in dockerfile
+    assert "ARG SSS_NPM_TAR_VERSION=7.5.21" in dockerfile
+    assert "ARG SSS_NPM_IP_ADDRESS_VERSION=10.3.1" in dockerfile
+    assert "ARG SSS_NPM_BRACE_EXPANSION_VERSION=5.0.9" in dockerfile
+    assert 'npm install --global "npm@${SSS_NPM_VERSION}"' in dockerfile
+    assert "npm pkg delete devDependencies" in dockerfile
+    assert (
+        'npm install --no-save --ignore-scripts --omit=dev "tar@${SSS_NPM_TAR_VERSION}"'
+        in dockerfile
+    )
+    assert "rm -rf /usr/local/lib/node_modules/corepack" in dockerfile
+
+
+def test_caddy_runtime_is_rebuilt_with_fixed_go_toolchain() -> None:
+    for name in ("web.Dockerfile", "proxy.Dockerfile"):
+        dockerfile = (ROOT / "infra/docker" / name).read_text(encoding="utf-8")
+        assert "ARG SSS_GO_BASE_IMAGE" in dockerfile
+        assert "FROM ${SSS_GO_BASE_IMAGE} AS caddy-build" in dockerfile
+        assert "ARG SSS_ALPINE_BASE_IMAGE" in dockerfile
+        assert "FROM ${SSS_ALPINE_BASE_IMAGE}" in dockerfile
+        assert "COPY infra/docker/caddy-build/go.mod" in dockerfile
+        assert "CGO_ENABLED=0 go build -mod=readonly" in dockerfile
+        assert "COPY --from=caddy-build /go/bin/caddy /usr/bin/caddy" in dockerfile

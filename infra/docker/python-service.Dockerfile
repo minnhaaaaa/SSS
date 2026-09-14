@@ -9,6 +9,12 @@ ARG SSS_UV_VERSION
 
 WORKDIR /opt/sss
 
+# A digest pins the base filesystem, while this layer applies security fixes
+# published after that image was built. The release gate scans the result.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml ./
 COPY uv.lock ./
 COPY apps ./apps

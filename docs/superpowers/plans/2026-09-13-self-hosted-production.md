@@ -661,7 +661,7 @@ git commit -m "feat: serve private radar from exasol evidence"
 - Produces: one `production` Compose profile connecting to external Exasol and one documented local qualification profile.
 - Consumes: API, worker, web, gateway, Caddy auth, credentials file, signing secret, and Exasol connection settings.
 
-- [ ] **Step 1: Write failing production composition tests**
+- [x] **Step 1: Write failing production composition tests**
 
 ```python
 def test_production_exposes_only_tls_proxy(compose_config) -> None:
@@ -688,11 +688,11 @@ def test_proxy_overwrites_trusted_identity_headers(caddy_adapter) -> None:
     assert response.request.headers["X-SSS-Operator"] == "operator"
 ```
 
-- [ ] **Step 2: Write failing backup/restore equivalence test**
+- [x] **Step 2: Write failing backup/restore equivalence test**
 
 Seed a disposable schema with evidence, one decision, one event, one pending intervention, and one consumed approval. Export it, restore into a second disposable schema, and compare migration version, per-table counts, and decision attestation.
 
-- [ ] **Step 3: Run focused tests**
+- [x] **Step 3: Run focused tests**
 
 Run:
 
@@ -702,15 +702,15 @@ Run:
 
 Expected: failure because production Compose and operational scripts do not exist.
 
-- [ ] **Step 4: Implement the production profile**
+- [x] **Step 4: Implement the production profile**
 
 Pin application base images and Caddy by digest. Add health checks, restart policies, resource limits, log rotation, internal networks, read-only roots, secret-file mounts, and no host ports except TLS proxy `8443:443`. Require external Exasol DSN and TLS certificate/key files. Configure Caddy Basic authentication from a bcrypt secret file, remove incoming trusted identity headers, and inject the authenticated user plus proxy token. Do not include demo, canary, registry seed, or local Exasol services.
 
-- [ ] **Step 5: Implement backup, restore, and readiness commands**
+- [x] **Step 5: Implement backup, restore, and readiness commands**
 
 Backup writes a manifest containing schema version, UTC time, table counts, export file hashes, and application version. Restore refuses a nonempty target schema unless `--allow-nonempty` is explicitly supplied. Readiness verifies TLS, API readiness, worker freshness, Exasol migration checksums, policy version, gateway configuration, and credential scopes without printing secrets.
 
-- [ ] **Step 6: Verify clean self-hosted startup**
+- [x] **Step 6: Verify clean self-hosted startup**
 
 Run:
 
@@ -722,7 +722,7 @@ docker compose --env-file .env.production -f infra/docker/production.compose.yam
 
 Expected: Compose renders without demo services, the disposable backup round trip passes, and readiness reports every required component healthy.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add infra/docker scripts docs/operations/self-hosted-production.md .env.example README.md tests
@@ -748,15 +748,15 @@ git commit -m "feat: ship recoverable self-hosted production profile"
 - Produces: a reproducible release gate and integrated `main` branch.
 - Consumes: all tasks and every active remote branch.
 
-- [ ] **Step 1: Complete the submission package**
+- [x] **Step 1: Complete the submission package**
 
 Rewrite the root README as the submission entry point with the problem, solution, architecture, supported agent/package-manager integrations, zero-cost local demo setup, production self-hosted deployment, usage, validation, security boundary, pitch-deck links, and a clearly labeled demo-video link. Create an editable pitch deck plus PDF export, its reproducible build source, and a timed demo-video script. The video workflow must show a real agent issuing an install request, SSS blocking a slopsquatted package before the child process starts, operator intervention with exact approval scope, and a successful authorized retry. Do not present the dashboard as the primary demo. If the final hosted video URL is not available, use one conspicuous `DEMO_VIDEO_URL` placeholder and document the single replacement step; do not invent a URL.
 
-- [ ] **Step 2: Add the complete validation driver**
+- [x] **Step 2: Add the complete validation driver**
 
 `scripts/validate_production.sh` runs frozen dependency installation, all unit/integration/security/E2E tests, live Exasol tests, mypy, Ruff, Node tests/typecheck/build, Docker Compose rendering, the client interception matrix, browser checks, dependency audits, secret scan, available image scan, backup/restore, and two protected-agent rehearsals.
 
-- [ ] **Step 3: Run the complete release gate**
+- [x] **Step 3: Run the complete release gate**
 
 Run:
 
@@ -781,7 +781,7 @@ git cherry codex/agent-guard-demo codex/teammate-1-intelligence
 
 Expected: no `+` commits remain on project implementation branches. Review any newly created remote branch before proceeding.
 
-- [ ] **Step 5: Document the release boundary**
+- [x] **Step 5: Document the release boundary**
 
 Update the contract changelog for new scopes, pagination, runtime mode, and persistence. Add a `0.2.0` changelog entry covering production deployment, arbitrary package evidence, durable enforcement, supported clients, security boundaries, and the explicit Exasol licensing/deployment limitation.
 

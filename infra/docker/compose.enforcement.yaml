@@ -17,7 +17,7 @@ services:
       - --port
       - "8000"
     environment:
-      SSS_ENV: ${SSS_ENV:-development}
+      SSS_ENV: ${SSS_ENV:-test}
       SSS_POLICY_VERSION: ${SSS_POLICY_VERSION:-sss-hackathon-v3}
       SSS_API_BEARER_TOKENS: ${SSS_API_BEARER_TOKENS:?Set SSS_API_BEARER_TOKENS}
       SSS_API_MAX_BODY_BYTES: ${SSS_API_MAX_BODY_BYTES:-1048576}
@@ -135,7 +135,9 @@ services:
         SSS_NODE_BASE_IMAGE: ${SSS_NODE_BASE_IMAGE:?Set a digest-pinned Node image}
         SSS_PYTHON_BASE_IMAGE: ${SSS_PYTHON_BASE_IMAGE:?Set a digest-pinned Python image}
         SSS_UV_VERSION: ${SSS_UV_VERSION:?Set the pinned uv version}
-        SSS_PNPM_VERSION: ${SSS_PNPM_VERSION:-10.31.0}
+        SSS_NPM_VERSION: ${SSS_NPM_VERSION:-12.0.2}
+        SSS_PNPM_VERSION: ${SSS_PNPM_VERSION:-12.4.1}
+        SSS_POETRY_VERSION: ${SSS_POETRY_VERSION:-2.4.3}
     environment:
       SSS_API_URL: http://api:8000
       SSS_GATEWAY_URL: http://gateway:8080

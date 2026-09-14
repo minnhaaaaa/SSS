@@ -121,7 +121,8 @@ services:
       dockerfile: infra/docker/web.Dockerfile
       args:
         SSS_NODE_BASE_IMAGE: ${SSS_NODE_BASE_IMAGE:?Set a digest-pinned Node image}
-        SSS_CADDY_IMAGE: ${SSS_CADDY_IMAGE:?Set a digest-pinned Caddy image}
+        SSS_GO_BASE_IMAGE: ${SSS_GO_BASE_IMAGE:?Set a digest-pinned Go builder image}
+        SSS_ALPINE_BASE_IMAGE: ${SSS_ALPINE_BASE_IMAGE:?Set a digest-pinned Alpine runtime image}
     networks: [app]
     tmpfs:
       - /config:size=8m,noexec,nosuid,nodev,uid=65532,gid=65532,mode=0700
@@ -136,7 +137,8 @@ services:
       context: ../..
       dockerfile: infra/docker/proxy.Dockerfile
       args:
-        SSS_CADDY_IMAGE: ${SSS_CADDY_IMAGE:?Set a digest-pinned Caddy image}
+        SSS_GO_BASE_IMAGE: ${SSS_GO_BASE_IMAGE:?Set a digest-pinned Go builder image}
+        SSS_ALPINE_BASE_IMAGE: ${SSS_ALPINE_BASE_IMAGE:?Set a digest-pinned Alpine runtime image}
     command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
     environment:
       SSS_TLS_HOST: ${SSS_TLS_HOST:?Set the production TLS hostname}
@@ -167,7 +169,9 @@ services:
         SSS_NODE_BASE_IMAGE: ${SSS_NODE_BASE_IMAGE:?Set a digest-pinned Node image}
         SSS_PYTHON_BASE_IMAGE: ${SSS_PYTHON_BASE_IMAGE:?Set a digest-pinned Python image}
         SSS_UV_VERSION: ${SSS_UV_VERSION:?Set the frozen uv version}
-        SSS_PNPM_VERSION: ${SSS_PNPM_VERSION:-10.31.0}
+        SSS_NPM_VERSION: ${SSS_NPM_VERSION:-12.0.2}
+        SSS_PNPM_VERSION: ${SSS_PNPM_VERSION:-12.4.1}
+        SSS_POETRY_VERSION: ${SSS_POETRY_VERSION:-2.4.3}
     environment:
       SSS_API_URL: http://api:8000
       SSS_API_TOKEN_FILE: /run/secrets/agent_api_token

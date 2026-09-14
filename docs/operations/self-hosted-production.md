@@ -55,7 +55,7 @@ and model-provider secrets in their named files. Generate the Caddy password has
 the plaintext password in Compose:
 
 ```bash
-docker run --rm caddy:2.10.2-alpine caddy hash-password
+docker run --rm caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648 caddy hash-password
 ```
 
 Copy the result to `secrets/operator_password_hash`. Install the TLS certificate and key at the

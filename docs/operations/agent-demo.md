@@ -49,22 +49,24 @@ the same origin, `https://npm.demo.sss.test`.
 
 ```bash
 docker build -f infra/docker/python-service.Dockerfile \
-  --build-arg SSS_PYTHON_BASE_IMAGE=python:3.12.10-slim-bookworm@sha256:fd95fa221297a88e1cf49c55ec1828edd7c5a428187e67b5d1805692d11588db \
+  --build-arg SSS_PYTHON_BASE_IMAGE=python:3.12.14-slim-bookworm@sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254 \
   --build-arg SSS_UV_VERSION=0.12.13 \
   -t sss-api:local .
 
 docker build -f infra/docker/agent.Dockerfile \
-  --build-arg SSS_NODE_BASE_IMAGE=node:22.19.0-bookworm-slim@sha256:4a4884e8a44826194dff92ba316264f392056cbe243dcc9fd3551e71cea02b90 \
-  --build-arg SSS_PYTHON_BASE_IMAGE=python:3.12.10-slim-bookworm@sha256:fd95fa221297a88e1cf49c55ec1828edd7c5a428187e67b5d1805692d11588db \
+  --build-arg SSS_NODE_BASE_IMAGE=node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 \
+  --build-arg SSS_PYTHON_BASE_IMAGE=python:3.12.14-slim-bookworm@sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254 \
   --build-arg SSS_UV_VERSION=0.12.13 \
-  --build-arg SSS_PNPM_VERSION=10.31.0 \
+  --build-arg SSS_NPM_VERSION=12.0.2 \
+  --build-arg SSS_PNPM_VERSION=12.4.1 \
+  --build-arg SSS_POETRY_VERSION=2.4.3 \
   -t sss-agent:local .
 
 docker run --rm --network none --user 65532:65532 \
   --entrypoint /usr/local/bin/pnpm sss-agent:local --version
 ```
 
-Validation rule: both builds exit zero and the networkless version check prints `10.31.0`. That
+Validation rule: both builds exit zero and the networkless version check prints `12.4.1`. That
 last check proves the real pnpm executable is already in the image and will not fetch Corepack
 metadata from the public internet.
 
@@ -148,20 +150,37 @@ Validation rule: exit code is `23`; the operator sees the same package, origin a
 `i` displays evidence and choosing the default `k` keeps it blocked. The canary count remains `1`
 after a narrated baseline, or `0` when the protected path is run directly after reset.
 
+For the final video, choose `a` instead of `k`. The operator prints the short lived
+`SSS_APPROVAL_TOKEN` and `SSS_APPROVAL_NONCE`. Copy them privately into the agent terminal and retry
+the identical command:
+
+```bash
+export SSS_APPROVAL_TOKEN='<operator output>'
+export SSS_APPROVAL_NONCE='<operator output>'
+docker compose -f infra/docker/demo.compose.yaml run --rm \
+  -e SSS_APPROVAL_TOKEN -e SSS_APPROVAL_NONCE protected-agent
+```
+
+The retry must print `SSS APPROVAL — exact one-time approval consumed.` The Guard recomputes the
+request identifier, consumes the grant atomically and removes both approval values before starting
+pnpm. The harmless canary increases once. A second retry with the same values must return `23` and
+must not increase the canary again.
+
 The displayed risk remains `75` because it is the frozen pre-execution score. The controlled
 lifecycle hook has not yet been ingested as a static finding at decision time; once ingested, the
 separate later assessment is `85` and must carry a new data-as-of timestamp.
 
-## 8. Optional read-only UI
+## 8. Optional authenticated evidence UI
 
 ```bash
 pnpm web:dev
 ```
 
 Open `http://127.0.0.1:5173`. Live mode is the default and redirects to **Agent protection
-active**. The UI reads only redacted `/v1/public/*` data and cannot mutate demo state or receive
-private SSE payloads. Set `VITE_SSS_USE_PROTOTYPE_DATA=true` only for an explicitly labelled visual
-prototype rehearsal.
+active**. In the self hosted profile Caddy supplies the scoped browser credential after Basic
+authentication; the browser then reads authenticated private Radar, package, decision and coverage
+routes. The client contains no approval credential and performs no mutation request. Set
+`VITE_SSS_USE_PROTOTYPE_DATA=true` only for an explicitly labelled visual prototype rehearsal.
 
 Validation rule: the page shows the frozen identity, `100/95/75`, policy
 `sss-hackathon-v3`, transition age `43`, and terminal commands. It must not claim that a protected

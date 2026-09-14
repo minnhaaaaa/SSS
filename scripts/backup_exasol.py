@@ -41,7 +41,7 @@ def _application_version() -> str:
     try:
         return version("stop-slop-squatting")
     except PackageNotFoundError:
-        return "0.1.0"
+        return "0.2.0"
 
 
 def _count_table(connection: BackupConnection, table: str) -> int:

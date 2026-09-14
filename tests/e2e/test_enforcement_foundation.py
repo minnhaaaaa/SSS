@@ -15,12 +15,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = ROOT / "infra" / "docker" / "compose.enforcement.yaml"
 DEFAULT_PYTHON_IMAGE = (
-    "python:3.12.10-slim-bookworm@"
-    "sha256:fd95fa221297a88e1cf49c55ec1828edd7c5a428187e67b5d1805692d11588db"
+    "python:3.12.14-slim-bookworm@"
+    "sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254"
 )
 DEFAULT_NODE_IMAGE = (
-    "node:22.19.0-bookworm-slim@"
-    "sha256:4a4884e8a44826194dff92ba316264f392056cbe243dcc9fd3551e71cea02b90"
+    "node:22.23.2-bookworm-slim@"
+    "sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5"
 )
 
 
@@ -109,12 +109,16 @@ def test_live_compose_security_and_local_canary() -> None:
     base_image = _local_python_digest(docker_executable)
     environment = {
         **os.environ,
+        "SSS_ENV": "test",
         "SSS_PYTHON_BASE_IMAGE": base_image,
         "SSS_NODE_BASE_IMAGE": os.environ.get("SSS_TEST_NODE_IMAGE", DEFAULT_NODE_IMAGE),
         "SSS_UV_VERSION": "0.12.13",
-        "SSS_PNPM_VERSION": "10.31.0",
+        "SSS_NPM_VERSION": "12.0.2",
+        "SSS_PNPM_VERSION": "12.4.1",
+        "SSS_POETRY_VERSION": "2.4.3",
         "SSS_API_BEARER_TOKENS": api_token,
         "SSS_GATEWAY_UPSTREAMS_JSON": '{"pypi":"https://pypi.org"}',
+        "SSS_GATEWAY_PERMITS_JSON": '{"pypi":{"/simple/pip/":null}}',
         "SSS_CANARY_TOKEN": canary_token,
         "SSS_CANARY_MARKER": marker,
         "SSS_PROJECT_PATH": str(ROOT),
@@ -147,7 +151,7 @@ def test_live_compose_security_and_local_canary() -> None:
             "--rm",
             "--no-deps",
             "--entrypoint",
-            "python",
+            "/opt/sss/.venv/bin/python",
             "protected-agent",
             "-c",
             (
@@ -185,7 +189,7 @@ else:
             "--rm",
             "--no-deps",
             "--entrypoint",
-            "python",
+            "/opt/sss/.venv/bin/python",
             "protected-agent",
             "-c",
             boundary_script,

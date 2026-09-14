@@ -1,5 +1,18 @@
 # Contract changelog
 
+## 2026-09-14
+
+- Added digest backed scoped credentials for `radar:read`, `agent:check`, `collector:write`,
+  `approval:write` and `operator:intervene`; production rejects legacy shared bearer-token mode.
+- Added authenticated private Radar repositories with bounded pagination while retaining redacted
+  public aggregates.
+- Added explicit `test`, `demo` and `production` runtime composition. Production requires Exasol,
+  the frozen policy version and durable operational repositories.
+- Persisted decision attestations, install attempts, interventions, idempotency claims and approval
+  consumption in Exasol. Approval state survives process restart and nonce consumption is atomic.
+- Added agent retry consumption for the frozen exact approval claim set. The token and nonce are
+  accepted only for one exact request and are removed before child execution.
+
 ## 2026-09-13
 
 - Integrated the enforcement API, CLI, gateway and canary apps as consumers of the frozen
