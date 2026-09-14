@@ -106,9 +106,11 @@ for _attempt in $(seq 1 30); do
 done
 curl -fsS http://127.0.0.1:4173/ >/dev/null
 google-chrome --headless --disable-gpu --no-sandbox \
+  --virtual-time-budget=3000 \
   --window-size=1440,900 --screenshot="$runtime_dir/ui-desktop.png" \
   http://127.0.0.1:4173/ >/dev/null 2>&1
 google-chrome --headless --disable-gpu --no-sandbox \
+  --virtual-time-budget=3000 \
   --window-size=390,844 --screenshot="$runtime_dir/ui-narrow.png" \
   http://127.0.0.1:4173/ >/dev/null 2>&1
 test -s "$runtime_dir/ui-desktop.png"
