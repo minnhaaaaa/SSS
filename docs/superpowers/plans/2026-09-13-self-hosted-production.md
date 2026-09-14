@@ -803,7 +803,7 @@ git status --short
 
 Expected: exit `0` and an empty status.
 
-- [ ] **Step 8: Merge into main without discarding user work**
+- [x] **Step 8: Merge into main without discarding user work**
 
 Verify `/home/minnhaaaaa/Documents/exasol/SSS` is clean, then run:
 
