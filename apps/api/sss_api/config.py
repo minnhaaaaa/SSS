@@ -32,6 +32,20 @@ def _boolean(values: Mapping[str, str], key: str, default: bool) -> bool:
     return raw == "true"
 
 
+def _secret_value(values: Mapping[str, str], value_key: str, file_key: str) -> str | None:
+    inline = values.get(value_key, "")
+    filename = values.get(file_key, "").strip()
+    if inline and filename:
+        raise ConfigurationError(f"configure only one of {value_key} and {file_key}")
+    if not filename:
+        return inline or None
+    try:
+        value = Path(filename).read_text(encoding="utf-8").rstrip("\r\n")
+    except OSError as exc:
+        raise ConfigurationError(f"{file_key} is unreadable") from exc
+    return value or None
+
+
 @dataclass(frozen=True, slots=True)
 class ApiSettings:
     environment: str
@@ -94,7 +108,11 @@ class ApiSettings:
             idempotency_key_max_bytes=_positive_int(source, "SSS_IDEMPOTENCY_KEY_MAX_BYTES", 128),
             sse_heartbeat_seconds=_positive_int(source, "SSS_SSE_HEARTBEAT_SECONDS", 15),
             sse_buffer_size=_positive_int(source, "SSS_SSE_BUFFER_SIZE", 512),
-            approval_signing_key=source.get("SSS_APPROVAL_SIGNING_KEY") or None,
+            approval_signing_key=_secret_value(
+                source,
+                "SSS_APPROVAL_SIGNING_KEY",
+                "SSS_APPROVAL_SIGNING_KEY_FILE",
+            ),
             exasol_required=_boolean(source, "SSS_EXASOL_REQUIRED", False),
             credentials_file=(
                 Path(credentials_file).expanduser()

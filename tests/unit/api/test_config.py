@@ -35,3 +35,14 @@ def test_api_settings_reject_non_positive_limits() -> None:
 def test_api_settings_reject_ambiguous_exasol_requirement() -> None:
     with pytest.raises(ConfigurationError, match="must be true or false"):
         ApiSettings.from_env({"SSS_EXASOL_REQUIRED": "sometimes"})
+
+
+def test_api_settings_read_signing_key_from_secret_file(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    signing_key = tmp_path / "approval-key"
+    signing_key.write_text("a-production-signing-key-with-32-bytes\n", encoding="utf-8")
+
+    settings = ApiSettings.from_env(
+        {"SSS_ENV": "test", "SSS_APPROVAL_SIGNING_KEY_FILE": str(signing_key)}
+    )
+
+    assert settings.approval_signing_key == "a-production-signing-key-with-32-bytes"

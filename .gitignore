@@ -2,8 +2,11 @@
 .env
 .env.*
 !.env.example
+!.env.production.example
 *.pem
 *.key
+secrets/
+backups/
 secrets-exasol-*.json
 
 # Python

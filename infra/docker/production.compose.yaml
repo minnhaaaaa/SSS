@@ -1,0 +1,228 @@
+name: sss-production
+
+x-hardened: &hardened
+  read_only: true
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  pids_limit: 256
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+x-python-build: &python-build
+  context: ../..
+  dockerfile: infra/docker/python-service.Dockerfile
+  args:
+    SSS_PYTHON_BASE_IMAGE: ${SSS_PYTHON_BASE_IMAGE:?Set a digest-pinned Python image}
+    SSS_UV_VERSION: ${SSS_UV_VERSION:?Set the frozen uv version}
+
+x-exasol-environment: &exasol-environment
+  SSS_EXASOL_DSN: ${SSS_EXASOL_DSN:?Set the external Exasol Personal DSN}
+  SSS_EXASOL_USER: ${SSS_EXASOL_USER:?Set the Exasol service user}
+  SSS_EXASOL_SCHEMA: ${SSS_EXASOL_SCHEMA:-SSS}
+  SSS_EXASOL_PASSWORD_FILE: /run/secrets/exasol_password
+
+services:
+  api:
+    <<: *hardened
+    build: *python-build
+    command: ["uvicorn", "--factory", "sss_api.main:create_app", "--host", "0.0.0.0", "--port", "8000", "--no-server-header"]
+    environment:
+      <<: *exasol-environment
+      SSS_ENV: production
+      SSS_EXASOL_REQUIRED: "true"
+      SSS_POLICY_VERSION: sss-hackathon-v3
+      SSS_CREDENTIALS_FILE: /run/secrets/api_credentials
+      SSS_APPROVAL_SIGNING_KEY_FILE: /run/secrets/approval_signing_key
+      SSS_RUNTIME_ROOT: /opt/sss
+      SSS_API_MAX_BODY_BYTES: ${SSS_API_MAX_BODY_BYTES:-1048576}
+      SSS_IDEMPOTENCY_KEY_MAX_BYTES: ${SSS_IDEMPOTENCY_KEY_MAX_BYTES:-128}
+      SSS_SSE_HEARTBEAT_SECONDS: ${SSS_SSE_HEARTBEAT_SECONDS:-15}
+      SSS_SSE_BUFFER_SIZE: ${SSS_SSE_BUFFER_SIZE:-512}
+    secrets:
+      - source: exasol_password
+        mode: 0400
+        uid: "65532"
+      - source: approval_signing_key
+        mode: 0400
+        uid: "65532"
+      - source: api_credentials
+        mode: 0400
+        uid: "65532"
+    networks: [app, protected, control-egress]
+    tmpfs: ["/tmp:size=32m,noexec,nosuid,nodev"]
+    mem_limit: 1g
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    <<: *hardened
+    build: *python-build
+    command: ["sss-worker", "run"]
+    environment:
+      <<: *exasol-environment
+      SSS_ENV: production
+      SSS_MODEL_BASE_URL: ${SSS_MODEL_BASE_URL:?Set the approved model endpoint}
+      SSS_MODEL_ID: ${SSS_MODEL_ID:?Set the approved model identifier}
+      SSS_MODEL_TOKEN_FILE: /run/secrets/model_provider_token
+      SSS_PROMPT_MANIFEST: /run/config/prompts.jsonl
+      SSS_MODEL_TIMEOUT_SECONDS: ${SSS_MODEL_TIMEOUT_SECONDS:-30}
+      SSS_MODEL_MAX_RESPONSE_BYTES: ${SSS_MODEL_MAX_RESPONSE_BYTES:-1048576}
+      SSS_MODEL_RETRY_ATTEMPTS: ${SSS_MODEL_RETRY_ATTEMPTS:-3}
+      SSS_WORKER_CONCURRENCY: ${SSS_WORKER_CONCURRENCY:-2}
+    secrets:
+      - source: exasol_password
+        mode: 0400
+        uid: "65532"
+      - source: model_provider_token
+        mode: 0400
+        uid: "65532"
+    volumes:
+      - type: bind
+        source: ${SSS_PROMPT_MANIFEST_FILE:?Set the reviewed prompt manifest path}
+        target: /run/config/prompts.jsonl
+        read_only: true
+    networks: [app, control-egress]
+    tmpfs: ["/tmp:size=32m,noexec,nosuid,nodev"]
+    mem_limit: 1g
+    cpus: 1.0
+
+  gateway:
+    <<: *hardened
+    build: *python-build
+    command: ["uvicorn", "--factory", "sss_gateway.main:create_app", "--host", "0.0.0.0", "--port", "8080", "--no-server-header"]
+    environment:
+      SSS_GATEWAY_UPSTREAMS_JSON: ${SSS_GATEWAY_UPSTREAMS_JSON:?Set approved HTTPS registry origins}
+      SSS_GATEWAY_PERMITS_JSON: ${SSS_GATEWAY_PERMITS_JSON:?Set exact metadata/artifact permits}
+      SSS_GATEWAY_MAX_ARTIFACT_BYTES: ${SSS_GATEWAY_MAX_ARTIFACT_BYTES:-20971520}
+      SSS_GATEWAY_CONNECT_TIMEOUT_SECONDS: ${SSS_GATEWAY_CONNECT_TIMEOUT_SECONDS:-3}
+      SSS_GATEWAY_READ_TIMEOUT_SECONDS: ${SSS_GATEWAY_READ_TIMEOUT_SECONDS:-15}
+    networks: [gateway-egress, protected]
+    tmpfs: ["/tmp:size=32m,noexec,nosuid,nodev"]
+    mem_limit: 512m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/live', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  web:
+    <<: *hardened
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        SSS_NODE_BASE_IMAGE: ${SSS_NODE_BASE_IMAGE:?Set a digest-pinned Node image}
+        SSS_CADDY_IMAGE: ${SSS_CADDY_IMAGE:?Set a digest-pinned Caddy image}
+    networks: [app]
+    tmpfs:
+      - /config:size=8m,noexec,nosuid,nodev,uid=65532,gid=65532,mode=0700
+      - /data:size=8m,noexec,nosuid,nodev,uid=65532,gid=65532,mode=0700
+      - /tmp:size=8m,noexec,nosuid,nodev,uid=65532,gid=65532,mode=0700
+    mem_limit: 256m
+    cpus: 0.5
+
+  proxy:
+    <<: *hardened
+    build:
+      context: ../..
+      dockerfile: infra/docker/proxy.Dockerfile
+      args:
+        SSS_CADDY_IMAGE: ${SSS_CADDY_IMAGE:?Set a digest-pinned Caddy image}
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    environment:
+      SSS_TLS_HOST: ${SSS_TLS_HOST:?Set the production TLS hostname}
+      SSS_OPERATOR_USERNAME: ${SSS_OPERATOR_USERNAME:?Set the single-org operator username}
+    secrets:
+      - tls_certificate
+      - tls_private_key
+      - operator_password_hash
+      - browser_api_token
+    networks: [edge, app]
+    ports: ["${SSS_TLS_PORT:-8443}:8443"]
+    tmpfs:
+      - /config:size=8m,noexec,nosuid,nodev,uid=65532,gid=65532,mode=0700
+      - /data:size=8m,noexec,nosuid,nodev,uid=65532,gid=65532,mode=0700
+      - /tmp:size=8m,noexec,nosuid,nodev,uid=65532,gid=65532,mode=0700
+    mem_limit: 256m
+    cpus: 0.5
+    depends_on:
+      api: {condition: service_healthy}
+
+  protected-agent:
+    <<: *hardened
+    profiles: ["agent"]
+    build:
+      context: ../..
+      dockerfile: infra/docker/agent.Dockerfile
+      args:
+        SSS_NODE_BASE_IMAGE: ${SSS_NODE_BASE_IMAGE:?Set a digest-pinned Node image}
+        SSS_PYTHON_BASE_IMAGE: ${SSS_PYTHON_BASE_IMAGE:?Set a digest-pinned Python image}
+        SSS_UV_VERSION: ${SSS_UV_VERSION:?Set the frozen uv version}
+        SSS_PNPM_VERSION: ${SSS_PNPM_VERSION:-10.31.0}
+    environment:
+      SSS_API_URL: http://api:8000
+      SSS_API_TOKEN_FILE: /run/secrets/agent_api_token
+      SSS_GATEWAY_URL: http://gateway:8080
+      SSS_PROJECT_ID: ${SSS_PROJECT_ID:?Set the protected project pseudonym}
+      SSS_AGENT_FAMILY: ${SSS_AGENT_FAMILY:-local-agent}
+      SSS_DEMO_ARTIFACT_SHA256: ${SSS_ARTIFACT_SHA256:?Set the reviewed direct artifact SHA-256}
+      PIP_INDEX_URL: http://gateway:8080/pypi/simple
+      PIP_EXTRA_INDEX_URL: ""
+      NPM_CONFIG_REGISTRY: http://gateway:8080/npm
+      NPM_CONFIG_REPLACE_REGISTRY_HOST: never
+    secrets:
+      - source: agent_api_token
+        mode: 0400
+        uid: "65532"
+    volumes:
+      - type: bind
+        source: ${SSS_PROJECT_PATH:?Set the project directory to protect}
+        target: /workspace
+    networks: [protected]
+    tmpfs: ["/tmp:size=64m,noexec,nosuid,nodev"]
+    mem_limit: 2g
+    cpus: 2.0
+    depends_on:
+      api: {condition: service_healthy}
+      gateway: {condition: service_healthy}
+
+networks:
+  edge: {}
+  app:
+    internal: true
+  protected:
+    internal: true
+  # External connectivity for Exasol Personal and the approved model endpoint.
+  # Restrict these destinations with the host/cloud firewall; the protected
+  # agent never joins this network.
+  control-egress: {}
+  gateway-egress: {}
+
+secrets:
+  exasol_password:
+    file: "${SSS_EXASOL_PASSWORD_FILE:?Set Exasol password secret file}"
+  approval_signing_key:
+    file: "${SSS_APPROVAL_SIGNING_KEY_FILE:?Set approval signing secret file}"
+  api_credentials:
+    file: "${SSS_API_CREDENTIALS_FILE:?Set scoped API credentials file}"
+  browser_api_token:
+    file: "${SSS_BROWSER_API_TOKEN_FILE:?Set browser radar token file}"
+  operator_password_hash:
+    file: "${SSS_OPERATOR_PASSWORD_HASH_FILE:?Set Caddy bcrypt hash file}"
+  tls_certificate:
+    file: "${SSS_TLS_CERTIFICATE_FILE:?Set TLS certificate file}"
+  tls_private_key:
+    file: "${SSS_TLS_PRIVATE_KEY_FILE:?Set TLS private-key file}"
+  model_provider_token:
+    file: "${SSS_MODEL_PROVIDER_TOKEN_FILE:?Set model provider token file}"
+  agent_api_token:
+    file: "${SSS_AGENT_API_TOKEN_FILE:?Set short-lived agent token file}"

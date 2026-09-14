@@ -16,6 +16,7 @@ from sss_core.repositories.exasol import (
     ExasolOperationalRepository,
     ExasolPolicyRepository,
     ExasolRadarRepository,
+    SchemaReadiness,
     SchemaReadinessChecker,
 )
 
@@ -45,6 +46,7 @@ class ServiceContainer:
     radar_repository: object | None = None
     operational_repository: object | None = None
     exasol_connection: object | None = None
+    schema_readiness: SchemaReadiness | None = None
 
 
 ServiceFactory = Callable[[ApiSettings], ServiceContainer]
@@ -100,6 +102,7 @@ def build_production_services(settings: ApiSettings) -> ServiceContainer:
         radar_repository=ExasolRadarRepository(connection),
         operational_repository=operational,
         exasol_connection=connection,
+        schema_readiness=readiness,
     )
 
 
@@ -140,6 +143,7 @@ def create_app(
     app.state.radar_repository = services.radar_repository
     app.state.operational_repository = services.operational_repository
     app.state.exasol_connection = services.exasol_connection
+    app.state.schema_readiness = services.schema_readiness
     app.state.runtime_mode = resolved_settings.runtime_mode
     app.state.event_broker = services.event_broker
     app.state.guard_service = services.guard_service

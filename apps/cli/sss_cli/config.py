@@ -49,6 +49,26 @@ def _executable_map(values: Mapping[str, str]) -> Mapping[str, Path]:
     return result
 
 
+def _api_token(values: Mapping[str, str]) -> str | None:
+    inline = values.get("SSS_API_TOKEN", "")
+    filename = values.get("SSS_API_TOKEN_FILE", "").strip()
+    if inline and filename:
+        raise CliConfigurationError(
+            "configure only one of SSS_API_TOKEN and SSS_API_TOKEN_FILE"
+        )
+    if not filename:
+        return inline or None
+    path = Path(filename).expanduser()
+    if not path.is_file():
+        raise CliConfigurationError("SSS_API_TOKEN_FILE does not exist")
+    if path.stat().st_mode & 0o077:
+        raise CliConfigurationError("SSS_API_TOKEN_FILE must be 0600 or stricter")
+    token = path.read_text(encoding="utf-8").strip()
+    if not token:
+        raise CliConfigurationError("SSS_API_TOKEN_FILE is empty")
+    return token
+
+
 @dataclass(frozen=True, slots=True)
 class OperatorSettings:
     """Minimal configuration required to review Guard interventions."""
@@ -61,7 +81,7 @@ class OperatorSettings:
         source = environ if values is None else values
         return cls(
             api_url=_http_url(source, "SSS_API_URL"),
-            api_token=source.get("SSS_API_TOKEN") or None,
+            api_token=_api_token(source),
         )
 
 
@@ -121,7 +141,7 @@ class CliSettings:
             gateway_url=_http_url(source, "SSS_GATEWAY_URL"),
             protected_api_url=_optional_http_url(source, "SSS_PROTECTED_API_URL"),
             protected_gateway_url=_optional_http_url(source, "SSS_PROTECTED_GATEWAY_URL"),
-            api_token=source.get("SSS_API_TOKEN") or None,
+            api_token=_api_token(source),
             real_executables=_executable_map(source),
             allowed_environment_keys=allowed,
             docker_executable=docker_executable,
