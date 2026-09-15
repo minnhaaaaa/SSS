@@ -1,4 +1,4 @@
-# SSS — Stop Slop Squatting
+# SSS - Stop Slop Squatting
 
 SSS stops autonomous coding agents from installing packages that were previously hallucinated and
 later registered by someone else. It stores time ordered evidence in Exasol, applies a deterministic
