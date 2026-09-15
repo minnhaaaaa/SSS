@@ -7,7 +7,7 @@ policy before package manager execution, and sends risky requests to a separate 
 ## Submission
 
 - **Source code:** this repository
-- **Demo video:** [watch the 42-second local agent-protection demo](docs/demo-video/sss-agent-demo.mp4)
+- **Demo video:** [watch the 42-second local agent-protection demo](https://drive.google.com/file/d/1UXfEZkfsbNYFPqLhKjTSGWieWyulbPTg/view?usp=sharing)
 - **Pitch deck:** [PowerPoint](docs/pitch/SSS-pitch-deck.pptx) and
   [PDF](docs/pitch/SSS-pitch-deck.pdf)
 - **Zero cost rehearsal:** [local agent demo](docs/operations/agent-demo.md)
